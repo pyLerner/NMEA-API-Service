@@ -1,0 +1,17 @@
+[project]
+name = "nmea-api-service"
+version = "0.1.0"
+description = "Supply NMEA Coordinates from RS485 to WEB API"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "aiosqlite>=0.21.0",
+    "fastapi>=0.119.0",
+    "httpx>=0.28.1",
+    "nuitka>=2.8.1",
+    "pyserial>=3.5",
+    "pyserial-asyncio>=0.6",
+    "python-dotenv>=1.1.1",
+    "tomli>=2.3.0",
+    "uvicorn>=0.37.0",
+]
