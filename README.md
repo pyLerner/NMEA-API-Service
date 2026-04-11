@@ -153,6 +153,44 @@ Authorization: Bearer <token>
 
 Пути вроде `/docs`, `/openapi.json`, `/redoc` **не** входят в публичные маршруты v2: для них действует тот же Bearer-middleware, что и для legacy (без токена — `401`).
 
+## Сборка standalone-бинарника (Nuitka)
+
+Скрипт [scripts/build-naviapiserv-aarch64.sh](scripts/build-naviapiserv-aarch64.sh) собирает **onefile** и **standalone** через Nuitka. Надёжнее выполнять на **Linux aarch64** с `gcc`/`clang` и `uv`.
+
+Из корня репозитория:
+
+```bash
+bash scripts/build-naviapiserv-aarch64.sh
+```
+
+Если при `./scripts/build-naviapiserv-aarch64.sh` появляется «Отказано в доступе», у файла нет бита исполнения: либо `chmod +x scripts/build-naviapiserv-aarch64.sh`, либо всегда вызывайте через `bash`, как выше.
+
+### Переменные окружения
+
+| Переменная | По умолчанию | Назначение |
+|------------|--------------|------------|
+| `DIST_NAME` | `Build-NaviTerminal.dist` | Имя подкаталога вывода относительно корня репозитория (если не задан абсолютный `OUT_DIR`). |
+| `OUT_DIR` | `<корень>/$DIST_NAME` | Каталог, куда Nuitka кладёт артефакты и итоговый `naviapiserv.bin`. |
+| `REMOVE_BUILD_DIRS` | `0` | После успешной сборки удалить в `OUT_DIR` промежуточные каталоги с суффиксом имени `*.build` (например `main.build`). Допустимые значения: `1`, `yes`, `true`. |
+
+Примеры:
+
+```bash
+# свой каталог вывода
+OUT_DIR=/tmp/NaviTerminal.bin bash scripts/build-naviapiserv-aarch64.sh
+
+# после сборки убрать промежуточные *.build
+REMOVE_BUILD_DIRS=1 bash scripts/build-naviapiserv-aarch64.sh
+```
+
+### Что лежит в каталоге вывода
+
+- **`naviapiserv.bin`** в корне `OUT_DIR` — итоговый **onefile**-бинарник (один файл для переноса на целевую систему; отдельный интерпретатор Python не нужен).
+- **`main.dist/`** — распакованный **standalone**: исполняемый файл и сопутствующие библиотеки; для запуска нужна **вся** эта папка.
+- Каталоги вида **`*.build`** — промежуточные файлы Nuitka; их можно удалить вручную или включить `REMOVE_BUILD_DIRS=1`.
+
+Каталог `main.onefile-build` шаблону `*.build` не соответствует и при `REMOVE_BUILD_DIRS` **не** удаляется; при необходимости удалите его отдельно.
+
 ## Тесты
 
 После `uv sync --group dev`:
@@ -185,6 +223,8 @@ src/
   db/cache.py
   db/sql.py
   serial_port/line_iterators.py
+scripts/
+  build-naviapiserv-aarch64.sh
 tests/
   conftest.py
   test_api_endpoints.py
