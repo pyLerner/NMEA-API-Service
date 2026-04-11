@@ -32,6 +32,7 @@ cd "$ROOT"
 uv sync
 
 # Сборка: обход модулей из src/ как при запуске python из каталога src
+# --nofollow-import-to: не тащить тестовые пакеты и unittest/pytest (Nuitka anti-bloat)
 cd "$ROOT/src"
 uv run python -m nuitka \
   --standalone \
@@ -46,6 +47,11 @@ uv run python -m nuitka \
   --include-package=aiosqlite \
   --include-package=serial \
   --include-package=serial_asyncio \
+  --nofollow-import-to='*.tests' \
+  --nofollow-import-to='*.test' \
+  --nofollow-import-to=unittest \
+  --nofollow-import-to=pytest \
+  --nofollow-import-to=doctest \
   --remove-output \
   main.py
 
