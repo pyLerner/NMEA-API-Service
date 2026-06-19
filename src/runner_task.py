@@ -6,7 +6,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import aiosqlite
 from db.cache import Record, RecordsCache
@@ -15,8 +15,10 @@ from db.sql import enforce_retention, insert_many
 # Config from Toml
 from models.data_models import AppConfig
 from nmea.parsing import (
+    ECEFPOSVEL_RE,
     GGA_RE,
     GNRMC_RE,
+    parse_ecefposvel,
     parse_gga_satellites,
     parse_rmc,
 )
@@ -29,6 +31,54 @@ from serial_port.line_iterators import (
 )
 
 
+def _is_navigation_line(line: str) -> bool:
+    return line.startswith("$G") or line.startswith("$ECEFPOSVEL")
+
+
+async def _cache_parsed_record(
+    parsed: dict[str, Any],
+    cache: RecordsCache,
+    logger: logging.Logger,
+    from_context: asyncio.AbstractEventLoop,
+) -> None:
+    rec = Record(
+        key_id=parsed.get("key_id", 0),
+        datetime=parsed.get(
+            "datetime",
+            datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        ),
+        is_valid=parsed.get("is_valid"),
+        latitude=parsed.get("latitude", 0.0),
+        latitude_hemi=parsed.get("latitude_hemi", "N"),
+        longitude=parsed.get("longitude", 0.0),
+        longitude_hemi=parsed.get("longitude_hemi", "E"),
+        speed=parsed.get("speed", 0.0),
+        direction=parsed.get("direction", 0.0),
+        mode=parsed.get("mode"),
+        satellites_count=parsed.get("satellites_count", 0),
+        source=parsed.get("source", "nmea"),
+    )
+
+    should_flush = await cache.add(rec)
+    if should_flush:
+        flush_event: asyncio.Event = from_context._flush_event  # type: ignore[attr-defined]
+        flush_event.set()
+
+    logger.info(
+        "Cached datetime=%s valid=%s lat=%s%s lon=%s%s speed=%s dir=%s sat=%s source=%s",
+        rec.datetime,
+        rec.is_valid,
+        f"{rec.latitude:.6f}" if rec.latitude is not None else "",
+        rec.latitude_hemi or "",
+        f"{rec.longitude:.6f}" if rec.longitude is not None else "",
+        rec.longitude_hemi or "",
+        rec.speed,
+        rec.direction,
+        rec.satellites_count,
+        rec.source,
+    )
+
+
 async def nmea_reader_task(
     cfg: AppConfig,
     cache: RecordsCache,
@@ -36,11 +86,13 @@ async def nmea_reader_task(
 ) -> None:
     """
     Continuously read NMEA sentences, update satellites hint from GGA,
-    parse RMC records, add them to cache, and trigger DB flush via an event.
+    parse RMC records (priority) or ECEFPOSVEL fallback, add them to cache,
+    and trigger DB flush via an event.
 
     This task signals the flusher by setting an asyncio.Event when needed.
     """
     satellites_hint: Optional[int] = None
+    use_rmc_source = False
 
     # Choose input source
     if cfg.system.input_path:
@@ -57,76 +109,40 @@ async def nmea_reader_task(
             cfg.hardware.baud,
         )
 
-    # Local event to notify flusher (shared by reference)
-    # We'll store it globally in app state for the flusher to wait on.
     from_context = asyncio.get_running_loop()
 
     while True:
         try:
             async for raw in line_iter:
                 line = raw.strip()
-                if not line or not line.startswith("$G"):
+                if not line or not _is_navigation_line(line):
                     await asyncio.sleep(0.01)
                     continue
 
-                # Update satellites hint from GGA
                 if GGA_RE.match(line):
                     sat = parse_gga_satellites(line)
                     if isinstance(sat, int):
                         satellites_hint = sat
                     continue
 
-                # Parse and cache RMC
-                if not GNRMC_RE.match(line):
+                if GNRMC_RE.match(line):
+                    parsed = parse_rmc(line, satellites_hint)
+                    if not parsed:
+                        logger.warning("RMC parse or checksum error: %s", line)
+                        continue
+                    use_rmc_source = True
+                    await _cache_parsed_record(parsed, cache, logger, from_context)
                     continue
-                parsed = parse_rmc(line, satellites_hint)
-                if not parsed:
-                    logger.warning("RMC parse or checksum error: %s", line)
-                    continue
-                
-                rec = Record(
-                    #TODO: задать значения по умолчанию
-                    # Если записи нет в БД, record_id == 0
-                    key_id=parsed.get("key_id", 0),  # совместимость со старой версией
-                    datetime=parsed.get(
-                        "datetime", 
-                        datetime
-                         .now(timezone.utc)
-                         .replace(microsecond=0)
-                         .isoformat()  
-                    ),
-                    is_valid=parsed.get("is_valid"),
-                    latitude=parsed.get("latitude", 0.0),
-                    latitude_hemi=parsed.get("latitude_hemi", "N"),
-                    longitude=parsed.get("longitude", 0.0),
-                    longitude_hemi=parsed.get("longitude_hemi", "E"),
-                    speed=parsed.get("speed", 0.0),
-                    direction=parsed.get("direction", 0.0),
-                    mode=parsed.get("mode"),
-                    satellites_count=parsed.get("satellites_count", 0),
-                )
 
-                should_flush = await cache.add(rec)
-                if should_flush:
-                    # Set a global event so the flusher wakes up
-                    flush_event: asyncio.Event = from_context._flush_event  # type: ignore[attr-defined]
-                    flush_event.set()
+                if ECEFPOSVEL_RE.match(line):
+                    if use_rmc_source:
+                        continue
+                    parsed = parse_ecefposvel(line)
+                    if not parsed:
+                        logger.warning("ECEFPOSVEL parse or checksum error: %s", line)
+                        continue
+                    await _cache_parsed_record(parsed, cache, logger, from_context)
 
-                # Log compactly
-                logger.info(
-                    "Cached datetime=%s valid=%s lat=%s%s lon=%s%s speed=%s dir=%s sat=%s",
-                    rec.datetime,
-                    rec.is_valid,
-                    f"{rec.latitude:.6f}" if rec.latitude is not None else "",
-                    rec.latitude_hemi or "",
-                    f"{rec.longitude:.6f}" if rec.longitude is not None else "",
-                    rec.longitude_hemi or "",
-                    rec.speed,
-                    rec.direction,
-                    rec.satellites_count,
-                )
-
-            # If file/stdin iterators finish, sleep a bit and exit loop
             logger.info("Input iterator finished")
             await asyncio.sleep(0.5)
             break
@@ -152,7 +168,6 @@ async def db_flusher_task(
     The event is cleared after each flush.
     """
     loop = asyncio.get_running_loop()
-    # Create a flush event on the loop context so reader can trigger it
     if not hasattr(loop, "_flush_event"):
         loop._flush_event = asyncio.Event()  # type: ignore[attr-defined]
 
@@ -161,14 +176,11 @@ async def db_flusher_task(
     while True:
         try:
             await flush_event.wait()
-            # Clear the event immediately to allow new triggers during flush
             flush_event.clear()
 
-            # Flush all records from cache and persist
             to_persist = await cache.flush_all()
             if to_persist:
                 await insert_many(db_conn, to_persist, logger)
-                # Retention (auditor role)
                 await enforce_retention(db_conn, cfg.database.max_rows, logger)
             else:
                 logger.info("Flush triggered but cache was empty")
@@ -179,4 +191,3 @@ async def db_flusher_task(
         except Exception as e:
             logger.exception("DB flusher error: %s", e)
             await asyncio.sleep(1.0)
-

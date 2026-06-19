@@ -45,10 +45,11 @@
 | `lat-hemisphere` | `"N" \| "S" \| null` | Полушарие широты. |
 | `longitude` | `number \| null` | Долгота в decimal degrees. |
 | `lon-hemisphere` | `"E" \| "W" \| null` | Полушарие долготы. |
-| `speed` | `number \| null` | Скорость (узлы). |
+| `speed` | `number \| null` | Скорость (км/ч). |
 | `direction` | `number \| null` | Курс (градусы). |
 | `mode` | `"E" \| "D" \| "A" \| "N" \| null` | Режим. |
 | `satellites-count` | `integer \| null` | Число спутников. |
+| `source` | `"nmea" \| "ecef" \| null` | Источник данных (`nmea` — RMC, `ecef` — ECEFPOSVEL). |
 
 ## 4. Эндпоинты
 

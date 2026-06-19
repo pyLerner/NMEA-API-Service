@@ -9,11 +9,25 @@ import aiosqlite
 from .cache import Record
 
 
+async def _ensure_source_column(
+    conn: aiosqlite.Connection, logger: logging.Logger
+) -> None:
+    async with conn.execute("PRAGMA table_info(gnrmc)") as cur:
+        rows = await cur.fetchall()
+    columns = {row[1] for row in rows}
+    if "source" not in columns:
+        await conn.execute(
+            "ALTER TABLE gnrmc ADD COLUMN source TEXT NOT NULL DEFAULT 'nmea'"
+        )
+        await conn.commit()
+        logger.info("Added source column to gnrmc")
+
+
 async def init_db(db_path: str, logger: logging.Logger) -> aiosqlite.Connection:
     """
     Initialize the SQLite database (create table if not exists) and PRAGMAs.
 
-    Schema extension: satellites_count column added.
+    Schema extension: satellites_count and source columns.
     """
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     conn = await aiosqlite.connect(db_path)
@@ -33,11 +47,13 @@ async def init_db(db_path: str, logger: logging.Logger) -> aiosqlite.Connection:
             direction REAL,
             mode CHAR(1),
             satellites_count INTEGER,
-            delivered INTEGER NOT NULL DEFAULT 0
+            delivered INTEGER NOT NULL DEFAULT 0,
+            source TEXT NOT NULL DEFAULT 'nmea'
         )
         """
     )
     await conn.commit()
+    await _ensure_source_column(conn, logger)
     logger.info("DB initialized at %s", db_path)
     return conn
 
@@ -55,8 +71,8 @@ async def insert_many(
             """
             INSERT INTO gnrmc (
                 datetime, is_valid, latitude, latitude_hemi, longitude, longitude_hemi,
-                speed, direction, mode, satellites_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                speed, direction, mode, satellites_count, source
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -70,6 +86,7 @@ async def insert_many(
                     r.direction,
                     r.mode,
                     r.satellites_count,
+                    r.source or "nmea",
                 )
                 for r in records
             ],

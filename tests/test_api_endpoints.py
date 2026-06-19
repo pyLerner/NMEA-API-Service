@@ -35,6 +35,7 @@ def _sample_record(**overrides: Any) -> Record:
         direction=176.5,
         mode="A",
         satellites_count=9,
+        source="nmea",
     )
     base.update(overrides)
     return Record(**base)
@@ -50,8 +51,8 @@ async def _insert_db_row(db_path: str) -> int:
             """
             INSERT INTO gnrmc (
                 datetime, is_valid, latitude, latitude_hemi, longitude, longitude_hemi,
-                speed, direction, mode, satellites_count, delivered
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                speed, direction, mode, satellites_count, delivered, source
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
             """,
             (
                 "2026-04-09T12:00:00+00:00",
@@ -64,6 +65,7 @@ async def _insert_db_row(db_path: str) -> int:
                 90.0,
                 "A",
                 4,
+                "nmea",
             ),
         )
         await conn.commit()
@@ -102,6 +104,7 @@ def test_v2_last_coords_with_record(client: TestClient, cache) -> None:
     assert rec["lat-hemisphere"] == "N"
     assert rec["lon-hemisphere"] == "E"
     assert rec["satellites-count"] == 9
+    assert rec["source"] == "nmea"
 
 
 # --- v2: GET /api/navigator/v1/all-coords ---
@@ -131,6 +134,7 @@ def test_v2_all_coords_from_db_when_cache_short(
     assert body["count"] >= 1
     ids = {row["record-id"] for row in body["data"]}
     assert kid in ids
+    assert body["data"][0]["source"] == "nmea"
 
 
 def test_v2_all_coords_limit_validation(client: TestClient) -> None:
@@ -202,6 +206,7 @@ def test_legacy_last_coords_with_data(client: TestClient, cache, auth_headers) -
     body = r.json()
     assert body["result"] is True
     assert body["record"]["record_id"] == 99
+    assert body["record"]["source"] == "nmea"
 
 
 def test_legacy_all_coords_with_auth(client: TestClient, app_config, auth_headers) -> None:

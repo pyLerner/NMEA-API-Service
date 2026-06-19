@@ -23,6 +23,7 @@ class Record:
     direction: Optional[float]
     mode: Optional[str]
     satellites_count: Optional[int]
+    source: Optional[str] = "nmea"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -48,6 +49,7 @@ class Record:
             "direction": self.direction,
             "mode": self.mode,
             "satellites_count": self.satellites_count,
+            "source": self.source,
         }
 
 

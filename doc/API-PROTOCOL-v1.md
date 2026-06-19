@@ -52,10 +52,11 @@ API возвращает записи в формате (совместимос�
 - `lat_hemisphere` (`"N" | "S" | null`) — полушарие широты.
 - `longitude` (`number | null`) — долгота в decimal degrees.
 - `lon_hemisphere` (`"E" | "W" | null`) — полушарие долготы.
-- `speed` (`number | null`) — скорость (узлы).
+- `speed` (`number | null`) — скорость (км/ч).
 - `direction` (`number | null`) — курс (градусы).
 - `mode` (`"E" | "D" | "A" | "N" | null`) — режим.
 - `satellites_count` (`integer | null`) — число спутников.
+- `source` (`string | null`) — источник данных (`nmea` — RMC, `ecef` — ECEFPOSVEL).
 
 ## 4. Эндпоинты
 
