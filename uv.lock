@@ -143,7 +143,6 @@ dependencies = [
     { name = "aiosqlite" },
     { name = "fastapi" },
     { name = "httpx" },
-    { name = "nuitka" },
     { name = "pyserial" },
     { name = "pyserial-asyncio" },
     { name = "python-dotenv" },
@@ -152,6 +151,9 @@ dependencies = [
 ]
 
 [package.dev-dependencies]
+build = [
+    { name = "nuitka" },
+]
 dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -162,7 +164,6 @@ requires-dist = [
     { name = "aiosqlite", specifier = ">=0.21.0" },
     { name = "fastapi", specifier = ">=0.119.0" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "nuitka", specifier = ">=2.8.1" },
     { name = "pyserial", specifier = ">=3.5" },
     { name = "pyserial-asyncio", specifier = ">=0.6" },
     { name = "python-dotenv", specifier = ">=1.1.1" },
@@ -171,6 +172,7 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
+build = [{ name = "nuitka", specifier = ">=2.8.1" }]
 dev = [
     { name = "pytest", specifier = ">=8.3.0" },
     { name = "pytest-asyncio", specifier = ">=0.25.0" },

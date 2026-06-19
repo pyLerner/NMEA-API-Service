@@ -12,3 +12,5 @@ wheels/
 # Logs
 logs/
 NaviTerminal-amd64.bin/
+Buid-NaviTerninal.dist/
+Build-NaviTerminal.dist/

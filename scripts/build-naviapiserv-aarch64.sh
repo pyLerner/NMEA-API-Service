@@ -1,38 +1,38 @@
 #!/usr/bin/env bash
-# Сборка onefile standalone для NMEA-API-Service → Build-NaviTerminal.dist/naviapiserv.bin
-# Запускать на Linux aarch64 с установленным gcc/clang и uv (или заранее: uv sync).
+# Сборка onefile standalone для NMEA-API-Service → Buid-NaviTerninal.dist/naviapiserv.bin
+# Целевая платформа: Rockchip RK3588, Ubuntu 20.04, aarch64.
 #
-# Если bash пишет «Отказано в доступе» при ./scripts/... — у файла нет бита исполнения:
-#   chmod +x scripts/build-naviapiserv-aarch64.sh
-# или запускайте без +x:
+# Собирать на native aarch64 с Ubuntu 20.04 (или совместимым glibc), иначе бинарник
+# может не запуститься на целевой плате. Кросс-сборка с x86_64 этим скриптом не поддерживается.
+#
+# Требования на машине сборки: bash, gcc/clang, uv, Python 3.13 (uv подтянет из .python-version).
+#
+# Запуск:
 #   bash scripts/build-naviapiserv-aarch64.sh
 #
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DIST_NAME="${DIST_NAME:-Build-NaviTerminal.dist}"
-# Переопределение каталога вывода, примеры:
-#   OUT_DIR=/abs/path ./scripts/build-naviapiserv-aarch64.sh
-#   OUT_DIR=/abs/path bash scripts/build-naviapiserv-aarch64.sh
+DIST_NAME="${DIST_NAME:-Buid-NaviTerninal.dist}"
 OUT_DIR="${OUT_DIR:-$ROOT/$DIST_NAME}"
-# После сборки удалить промежуточные каталоги Nuitka в OUT_DIR (имя *.build), например main.build:
-#   REMOVE_BUILD_DIRS=1 ./scripts/build-naviapiserv-aarch64.sh
-# REMOVE_BUILD_DIRS="${REMOVE_BUILD_DIRS:-0}"
+OUTPUT_BIN="$OUT_DIR/naviapiserv.bin"
 
-# Проверка архитектуры (не блокирует кросс, но предупреждает)
 ARCH="$(uname -m)"
 if [[ "$ARCH" != "aarch64" && "$ARCH" != "arm64" ]]; then
-  echo "Warning: uname -m=$ARCH — для бинарника под aarch64 надёжнее собирать на aarch64." >&2
+  echo "Error: uname -m=$ARCH — для RK3588 нужна native-сборка на aarch64." >&2
+  echo "       Запустите скрипт на Ubuntu 20.04 aarch64 (или ALLOW_CROSS_BUILD=1 для экспериментов)." >&2
+  if [[ "${ALLOW_CROSS_BUILD:-0}" != "1" ]]; then
+    exit 1
+  fi
+  echo "Warning: ALLOW_CROSS_BUILD=1 — бинарник может не работать на RK3588." >&2
 fi
 
 mkdir -p "$OUT_DIR"
 
 cd "$ROOT"
-# Зависимости приложения + Nuitka
-uv sync
+# Только runtime-зависимости + группа build (Nuitka). Без pytest и dev-группы.
+uv sync --no-dev --group build
 
-# Сборка: обход модулей из src/ как при запуске python из каталога src
-# --nofollow-import-to: не тащить тестовые пакеты и unittest/pytest (Nuitka anti-bloat)
 cd "$ROOT/src"
 uv run python -m nuitka \
   --standalone \
@@ -49,22 +49,18 @@ uv run python -m nuitka \
   --include-package=serial_asyncio \
   --nofollow-import-to='*.tests' \
   --nofollow-import-to='*.test' \
+  --nofollow-import-to=tests \
   --nofollow-import-to=unittest \
   --nofollow-import-to=pytest \
   --nofollow-import-to=doctest \
   --remove-output \
   main.py
 
-# if [[ "$REMOVE_BUILD_DIRS" == "1" || "$REMOVE_BUILD_DIRS" == "yes" || "$REMOVE_BUILD_DIRS" == "true" ]]; then
-#   shopt -s nullglob
-#   for d in "$OUT_DIR"/*.build; do
-#     if [[ -d "$d" ]]; then
-#       rm -rf "$d"
-#       echo "Removed: $d"
-#     fi
-#   done
-#   shopt -u nullglob
-# fi
+if [[ ! -f "$OUTPUT_BIN" ]]; then
+  echo "Error: expected binary not found: $OUTPUT_BIN" >&2
+  exit 1
+fi
 
-echo "OK: $OUT_DIR/naviapiserv.bin"
-ls -lh "$OUT_DIR/naviapiserv.bin"
+echo "OK: $OUTPUT_BIN"
+ls -lh "$OUTPUT_BIN"
+file "$OUTPUT_BIN"
