@@ -11,6 +11,10 @@ wheels/
 
 # Logs
 logs/
-NaviTerminal-amd64.bin/
-Buid-NaviTerninal.dist/
 Build-NaviTerminal.dist/
+Buid-NaviTerninal.dist/
+
+# Docker
+NavigatorDockerApp/
+docker/navigator-*.tar.gz
+docker/NavigatorDockerApp-*.tar.gz

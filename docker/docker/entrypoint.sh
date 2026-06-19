@@ -1,74 +1,83 @@
-#!/bin/env bash
+#!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
-# Функция корректного завершения всех процессов
+NAVAPI_CONFIG="/etc/navigator/navapiserv-config.toml"
+
+log() {
+    printf '%s [INFO] %s\n' "$(date -Iseconds)" "$*"
+}
+
+warn() {
+    printf '%s [WARNING] %s\n' "$(date -Iseconds)" "$*" >&2
+}
+
+err() {
+    printf '%s [ERROR] %s\n' "$(date -Iseconds)" "$*" >&2
+}
+
 cleanup() {
-    echo "$(date -Iseconds) [INFO] Trapped SIGTERM. Stopping all processes..."
+    log "Trapped SIGTERM. Stopping all processes..."
     kill $(jobs -p) 2>/dev/null || true
-    wait
-    echo "$(date -Iseconds) [INFO] All processes stopped. Exiting."
+    wait || true
+    log "All processes stopped. Exiting."
     exit 0
 }
 trap cleanup SIGTERM SIGINT
 
-# ==========================================
-# 1. ЗАПУСК FASTAPI (Всегда работает)
-# ==========================================
-echo "$(date -Iseconds) [INFO] Starting NavAPI app..."
-/app/NavAPIServer/bin/naviapiserv.bin \
-    --config /data/NavAPIServer/etc/navapiserv-config.toml &
+if [[ ! -x /bin/naviapiserv.bin ]]; then
+    err "Missing executable: /bin/naviapiserv.bin"
+    exit 1
+fi
 
-# ==========================================
-# 2. ПРОВЕРКИ И ЗАПУСК GO ПРИЛОЖЕНИЙ
-# ==========================================
+if [[ ! -f "$NAVAPI_CONFIG" ]]; then
+    err "Missing NavAPI config: $NAVAPI_CONFIG"
+    exit 1
+fi
+
+log "Starting NavAPI app..."
+/bin/naviapiserv.bin --config "$NAVAPI_CONFIG" &
 
 shopt -s nullglob
-configs=(/data/NDTPClient/etc/*.toml)
+configs=(/etc/navigator/*.toml)
 shopt -u nullglob
 
-if [ ${#configs[@]} -eq 0 ]; then
-    echo "$(date -Iseconds) [WARNING] No .toml config files found in /app/NDTPClient/etc/."
-    echo "$(date -Iseconds) [WARNING] Go NDTP_Client will NOT be started."
+ndtp_configs=()
+for conf in "${configs[@]}"; do
+    base="$(basename "$conf")"
+    if [[ "$base" == "navapiserv-config.toml" ]]; then
+        continue
+    fi
+    ndtp_configs+=("$conf")
+done
+
+if ((${#ndtp_configs[@]} == 0)); then
+    warn "No NDTP client config files found in /etc/navigator/."
+    warn "NDTP_Client will NOT be started."
 else
-    echo "$(date -Iseconds) [INFO] Found ${#configs[@]} config file(s). Validating..."
-    
-    for conf in "${configs[@]}"; do
-        echo "----------------------------------------"
-        echo "$(date -Iseconds) [INFO] Processing config: $conf"
-        
-        # 🎯 Вырезаем ТОЛЬКО секцию [NDTP] и парсим Host / Port внутри неё
-        NDTP_SECTION=$(awk '/^\[NDTP\]/{flag=1;next}/^\[/{flag=0}flag' "$conf")
-        
-        HOST=$(echo "$NDTP_SECTION" | grep -i '^[[:space:]]*Host[[:space:]]*=' | head -n 1 | awk -F'=' '{print $2}' | tr -d ' "')
-        PORT=$(echo "$NDTP_SECTION" | grep -i '^[[:space:]]*Port[[:space:]]*=' | head -n 1 | awk -F'=' '{print $2}' | tr -d ' "')
-        
-        # Если параметры не найдены в этой секции
-        if [ -z "$HOST" ] || [ -z "$PORT" ]; then
-            echo "$(date -Iseconds) [ERROR] Could not parse Host or Port inside [NDTP] section of $conf. Skipping."
+    log "Found ${#ndtp_configs[@]} NDTP config file(s). Validating..."
+
+    for conf in "${ndtp_configs[@]}"; do
+        log "Processing config: $conf"
+
+        if [[ ! -x /bin/NDTP_Client ]]; then
+            err "Missing executable: /bin/NDTP_Client"
             continue
         fi
-        
-        echo "$(date -Iseconds) [INFO] Extracted NDTP target $HOST:$PORT. Checking connection..."
-        
-        # Проверяем доступность TCP порта (таймаут 3 секунды)
-        #if timeout 3 bash -c "nc -z $HOST $PORT" >/dev/null 2>&1; then
-        #    echo "$(date -Iseconds) [INFO] Connection to $HOST:$PORT is OK. Starting NDTP_Client..."
-        #    /app/NDTPClient/bin/NDTP_Client --config "$conf" &
-        #else
-        #    echo "$(date -Iseconds) [ERROR] Cannot reach server at $HOST:$PORT. Skipping this config."
-        #fi
 
-        echo "$(date -Iseconds) [INFO] Connection to $HOST:$PORT is OK. Starting NDTP_Client..."
-        /app/NDTPClient/bin/NDTP_Client --config "$conf" &
+        ndtp_section="$(awk '/^\[NDTP\]/{flag=1;next}/^\[/{flag=0}flag' "$conf")"
+        host="$(echo "$ndtp_section" | grep -i '^[[:space:]]*Host[[:space:]]*=' | head -n 1 | awk -F'=' '{print $2}' | tr -d ' "')"
+        port="$(echo "$ndtp_section" | grep -i '^[[:space:]]*Port[[:space:]]*=' | head -n 1 | awk -F'=' '{print $2}' | tr -d ' "')"
+
+        if [[ -z "$host" || -z "$port" ]]; then
+            err "Could not parse Host or Port inside [NDTP] section of $conf. Skipping."
+            continue
+        fi
+
+        log "Starting NDTP_Client for target ${host}:${port}..."
+        /bin/NDTP_Client --config "$conf" &
     done
 fi
 
-echo "----------------------------------------"
-echo "$(date -Iseconds) [INFO] All startup checks completed. Monitoring processes."
-
-# ==========================================
-# 3. ОЖИДАНИЕ
-# ==========================================
+log "Startup completed. Monitoring processes."
 wait
-

@@ -1,33 +1,28 @@
-#FROM python:3.12-slim
 FROM debian:bookworm-slim
 
-ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=UTC
 
-# curl net-tools procps  may be added for debug
-RUN apt-get update && apt-get install -y \
-    --no-install-recommends \
-    bash \
-    ca-certificates \
-    tzdata \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        bash \
+        ca-certificates \
+        tzdata \
+    && ln -sf /usr/share/zoneinfo/Etc/UTC /etc/localtime \
+    && echo "Etc/UTC" > /etc/timezone \
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/*
 
-WORKDIR /app
+RUN mkdir -p /app /bin /db /log /etc/navigator
 
-# ---------- Python FastAPI ----------
-COPY NavAPIServer/bin /app/NavAPIServer/bin
-RUN chmod +x /app/NavAPIServer/bin/naviapiserv.bin
+COPY NavAPIServer/bin/naviapiserv.bin /bin/naviapiserv.bin
+COPY NDTPClient/bin/NDTP_Client /bin/NDTP_Client
+RUN chmod +x /bin/naviapiserv.bin /bin/NDTP_Client \
+    && ln -sf NDTP_Client /bin/NDTPClient
 
-# ---------- Go binary ----------
-COPY NDTPClient/bin /app/NDTPClient/bin
-RUN chmod +x /app/NDTPClient/bin/NDTP_Client
-
-# ---------- Entrypoint ----------
+COPY etc/ /etc/navigator/
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-VOLUME ["/data"]
-
-EXPOSE 8000
+WORKDIR /app
 
 ENTRYPOINT ["/entrypoint.sh"]
-

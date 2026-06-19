@@ -1,0 +1,25 @@
+services:
+  navigator:
+    image: navigator:1
+    container_name: navigator
+    restart: unless-stopped
+    network_mode: host
+    tmpfs:
+      - /tmp:exec,size=1G,mode=1777
+    devices:
+      - "/dev/ttyS0:/dev/ttyS0"
+      - "/dev/ttyS3:/dev/ttyS3"
+    group_add:
+      - dialout
+    volumes:
+      - /opt/navigator/etc:/etc/navigator:ro
+      - /opt/navigator/db:/db:rw
+      - /opt/navigator/log:/log:rw
+      - /etc/localtime:/etc/localtime:ro
+    stop_signal: SIGTERM
+    stop_grace_period: 10s
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "5"
