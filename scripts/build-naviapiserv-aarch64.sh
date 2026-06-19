@@ -13,7 +13,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DIST_NAME="${DIST_NAME:-Buid-NaviTerninal.dist}"
+DIST_NAME="${DIST_NAME:-Build-NaviTerminal.dist}"
 OUT_DIR="${OUT_DIR:-$ROOT/$DIST_NAME}"
 OUTPUT_BIN="$OUT_DIR/naviapiserv.bin"
 
