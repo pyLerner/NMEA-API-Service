@@ -1,0 +1,33 @@
+[API]
+Host = "127.0.0.1"
+Port = 7100
+Token = "A0473A67-27A1-3C05-A2D1-5C134639347F"
+
+[NDTP]
+Host = "31.172.134.100" 
+Port = 5401
+
+[System]
+LogDir = "/data/NDTPClient/log/tver-client.log"
+Timeout = 10
+
+# Используемые номера терминалов
+# 706720001 - тестовый стенд разработки
+# 70672010N - терминалы в Нижнем 
+# 70672020N - терминал на автобусе в Твери
+
+PeerAddr = 706720001
+Regular = true 
+Interval = 30 
+ServerPort = 4050
+
+[History]
+HistDir = "/data/NDTPClient/db/tver-hist.db"
+MaxRecords = 150000
+CleanInterval = 20
+
+[Message] #Для отправки сообщений (SED) в Message API
+LogDir = "/data/NDTPClient/log/tns-MessageLog.log"
+APIAddr = "localhost"
+APIPort = 7200
+APIEndpoint = "/api/message-relay/inbound-server-message"

@@ -1,0 +1,33 @@
+[Database]
+DB = "/data/NavAPIServer/db/gnrmc.db"
+MaxRows = 150000
+
+[Hardware]
+
+# Stend
+# HardwarePort = "/dev/ttyS3"
+# Baud = 9600
+
+# Tram + Signal
+HardwarePort = "/dev/ttyS0"
+Baud = 19200
+
+[API]
+Host = "0.0.0.0"
+HTTP_Port = 7100
+Workers = 5
+Token = "A0473A67-27A1-3C05-A2D1-5C134639347F"
+
+[System]
+ProgramDirectory = "/app/NavAPIServer"
+Input = ""    # leave empty to read serial; or set to a test file
+Stdin = false
+LogDir = "/data/NavAPIServer/logs"
+
+[Memory]
+# Max number of records kept in the in-memory cache
+CacheRecordsLength = 5000
+
+# Flush trigger: after this number of new records since the last DB write,
+# the app will write ALL cached records to DB and clear the cache
+CacheRecords = 100

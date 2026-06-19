@@ -1,0 +1,57 @@
+# v1.0.6 
+- Добавлен API endpoint 
+```POST /SendIrma 
+```
+для приема данных от датчиков пасспотока
+пример payload
+```
+{
+    "geo" : {
+          "direction" : 82.29,
+          "is_valid" : "A",
+          "lat_hemisphere" : "N",
+          "latitude" : 60.0151117,
+          "lon_hemisphere" : "E",
+          "longitude" : null,
+          "mode" : "A",
+          "record_id" : 0,
+          "satellites_count" : 14,
+          "speed" : 0,
+          "time" : "2026-03-12T10:36:19+00:00"
+       },
+    "pass_counts": {
+      "counts_by_door": {
+        "1": {
+          "boarding": 0,
+          "alighting": 2,
+          "raw_payload": "0002",
+          "opcode": "E",
+          "range_limited_to_255": true,
+          "e_after_f_sec": 0.0009333310008514673
+        },
+        "2": {
+          "boarding": 0,
+          "alighting": 0,
+          "raw_payload": "0000",
+          "opcode": "E",
+          "range_limited_to_255": true,
+          "e_after_f_sec": 0.00079420600013691
+        },
+        "3": {
+          "boarding": 0,
+          "alighting": 0,
+          "raw_payload": "0000",
+          "opcode": "E",
+          "range_limited_to_255": true,
+          "e_after_f_sec": 0.001496247001341544
+        }
+      },
+      "counts_total": {
+        "boarding": 0,
+        "alighting": 2
+      }
+    }
+}
+```
+В случае успеха возвращается `{"result": "ok"}` 
+В конфиге добавлен параметр System.ServerPort

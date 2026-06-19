@@ -1,0 +1,28 @@
+[API]
+Host = "127.0.0.1"
+Port = 7000
+Token = "A0473A67-27A1-3C05-A2D1-5C134639347F"
+
+[NDTP]
+Host = "79.104.55.66"
+Port = 7070
+
+[System]
+LogDir =  "/data/NDTPClient/log/tns-client.log"
+Timeout = 10
+PeerAddr = 706197201
+Disconnect = false # true -- каждый навигац. пакет в новом соединении, false -- непрерывное соединение
+Regular = true # true -- отправка раз в interval, false -- единичный пакет
+Interval = 30
+ServerPort = 4050 #Порт на котором находятся все эндпоинты
+
+[History]
+HistDir = "/data/NDTPClient/db/tns-hist.db"
+MaxRecords = 150000
+CleanInterval = 20
+
+[Message] #Для отправки сообщений (SED) в Message API
+LogDir = "/data/NDTPClient/log/tns-MessageLog.log"
+APIAddr = "localhost"
+APIPort = 1234
+APIEndpoint = "/api/message-relay/inbound-server-message"
