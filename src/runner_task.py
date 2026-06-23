@@ -14,7 +14,6 @@ from db.sql import enforce_retention, insert_many
 
 # Config from Toml
 from models.data_models import AppConfig
-from debug_trace import debug_log
 from nmea.parsing import (
     ECEFPOSVEL_RE,
     GGA_RE,
@@ -64,14 +63,6 @@ async def _cache_parsed_record(
     if should_flush:
         flush_event: asyncio.Event = from_context._flush_event  # type: ignore[attr-defined]
         flush_event.set()
-        # #region agent log
-        debug_log(
-            "runner_task.py:cache",
-            "cache flush triggered",
-            {"source": rec.source, "valid": rec.is_valid},
-            hypothesis_id="C",
-        )
-        # #endregion
 
     logger.info(
         "Cached datetime=%s valid=%s lat=%s%s lon=%s%s speed=%s dir=%s sat=%s source=%s",
@@ -119,29 +110,13 @@ async def nmea_reader_task(
         )
 
     from_context = asyncio.get_running_loop()
-    lines_seen = 0
-    nav_lines_seen = 0
 
     while True:
         try:
             async for raw in line_iter:
-                lines_seen += 1
                 if nmea_row_logger is not None:
                     nmea_row_logger.info(raw.rstrip("\r\n"))
                 line = raw.strip()
-                if lines_seen <= 3:
-                    # #region agent log
-                    debug_log(
-                        "runner_task.py:serial",
-                        "serial line received",
-                        {
-                            "line_num": lines_seen,
-                            "prefix": line[:24] if line else "",
-                            "is_nav": _is_navigation_line(line),
-                        },
-                        hypothesis_id="C",
-                    )
-                    # #endregion
                 if not line or not _is_navigation_line(line):
                     await asyncio.sleep(0.01)
                     continue
@@ -153,7 +128,6 @@ async def nmea_reader_task(
                     continue
 
                 if GNRMC_RE.match(line):
-                    nav_lines_seen += 1
                     parsed = parse_rmc(line, satellites_hint)
                     if not parsed:
                         logger.warning("RMC parse or checksum error: %s", line)
@@ -163,7 +137,6 @@ async def nmea_reader_task(
                     continue
 
                 if ECEFPOSVEL_RE.match(line):
-                    nav_lines_seen += 1
                     if use_rmc_source:
                         continue
                     parsed = parse_ecefposvel(line)
@@ -178,25 +151,9 @@ async def nmea_reader_task(
 
         except asyncio.CancelledError:
             logger.info("NMEA reader task cancelled")
-            # #region agent log
-            debug_log(
-                "runner_task.py:reader",
-                "reader cancelled",
-                {"lines_seen": lines_seen, "nav_lines_seen": nav_lines_seen},
-                hypothesis_id="A,E",
-            )
-            # #endregion
             break
         except Exception as e:
             logger.exception("NMEA reader error: %s", e)
-            # #region agent log
-            debug_log(
-                "runner_task.py:reader",
-                "reader exception",
-                {"error": str(e), "lines_seen": lines_seen},
-                hypothesis_id="C,E",
-            )
-            # #endregion
             await asyncio.sleep(1.0)
 
 

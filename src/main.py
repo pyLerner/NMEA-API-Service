@@ -34,7 +34,6 @@ from log_config.log_config import setup_logger
 from models.data_models import load_config
 
 # Task Runner
-from debug_trace import debug_log
 from runner_task import db_flusher_task, nmea_reader_task
 
 # =============================================================================
@@ -71,19 +70,6 @@ async def main_async(args: argparse.Namespace) -> None:
         cfg.memory.residual_cache,
         cfg.log.log_row_nmea,
     )
-    # #region agent log
-    debug_log(
-        "main.py:startup",
-        "app starting",
-        {
-            "db_path": cfg.database.db_path,
-            "workers": cfg.api.workers,
-            "cache_trigger": cfg.memory.flush_batch,
-            "serial_port": cfg.hardware.port,
-        },
-        hypothesis_id="A,B",
-    )
-    # #endregion
 
     # DB
     db_conn = await init_db(cfg.database.db_path, logger)
@@ -124,35 +110,11 @@ async def main_async(args: argparse.Namespace) -> None:
     )
     api_t = asyncio.create_task(server.serve(), name="api_server")
 
-    async def _heartbeat_task() -> None:
-        beat = 0
-        while True:
-            await asyncio.sleep(5)
-            beat += 1
-            # #region agent log
-            debug_log(
-                "main.py:heartbeat",
-                "app alive",
-                {"beat": beat, "reader_done": reader_t.done(), "api_done": api_t.done()},
-                hypothesis_id="A,E",
-            )
-            # #endregion
-
-    heartbeat_t = asyncio.create_task(_heartbeat_task(), name="heartbeat")
-
     # Graceful shutdown handling
     shutdown_event = asyncio.Event()
 
     def _handle_signal(sig: int, frame: Any | None) -> None:
         logger.info("Received signal %s, shutting down...", sig)
-        # #region agent log
-        debug_log(
-            "main.py:signal",
-            "shutdown signal received",
-            {"signal": sig},
-            hypothesis_id="A,E",
-        )
-        # #endregion
         shutdown_event.set()
 
     for s in (signal.SIGINT, signal.SIGTERM):
@@ -165,24 +127,10 @@ async def main_async(args: argparse.Namespace) -> None:
     # Wait for shutdown event
     await shutdown_event.wait()
 
-    # #region agent log
-    debug_log(
-        "main.py:shutdown",
-        "shutdown_event set, cancelling tasks",
-        {
-            "reader_done": reader_t.done(),
-            "flusher_done": flusher_t.done(),
-            "api_done": api_t.done(),
-            "api_exc": str(api_t.exception()) if api_t.done() and api_t.exception() else None,
-        },
-        hypothesis_id="A,B,E",
-    )
-    # #endregion
-
     # Cancel background tasks
-    for t in (reader_t, flusher_t, heartbeat_t):
+    for t in (reader_t, flusher_t):
         t.cancel()
-    await asyncio.gather(reader_t, flusher_t, heartbeat_t, return_exceptions=True)
+    await asyncio.gather(reader_t, flusher_t, return_exceptions=True)
 
     # Stop API server if running
     if server:
