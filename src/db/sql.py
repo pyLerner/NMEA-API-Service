@@ -6,6 +6,8 @@ from pathlib import Path
 
 import aiosqlite
 
+from debug_trace import debug_log
+
 from .cache import Record
 
 
@@ -66,6 +68,14 @@ async def insert_many(
     """
     if not records:
         return
+    # #region agent log
+    debug_log(
+        "sql.py:insert_many",
+        "inserting records",
+        {"count": len(records), "first_db": records[0].datetime if records else None},
+        hypothesis_id="C,D",
+    )
+    # #endregion
     async with conn.execute("BEGIN"):
         await conn.executemany(
             """

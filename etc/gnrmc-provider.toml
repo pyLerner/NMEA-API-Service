@@ -16,12 +16,19 @@ Token = "A0473A67-27A1-3C05-A2D1-5C134639347F"
 ProgramDirectory = "/usr/local/gnrmc"
 Input = ""    # leave empty to read serial; or set to a test file
 Stdin = false
+
+[Log]
 LogDir = "logs"
+LogName = "gnrmc.log"
+LogLevel = "INFO"
+MaxLogs = 5
+MaxSize = "5m"
+LogRowNMEA = "no"
+RowNMEA = "nmea-row.log"
 
 [Memory]
 # Max number of records kept in the in-memory cache
 CacheRecordsLength = 5000
-
-# Flush trigger: after this number of new records since the last DB write,
-# the app will write ALL cached records to DB and clear the cache
+# Flush window: (CacheRecords - ResidualCache) records go to DB, ResidualCache stay in cache
 CacheRecords = 100
+ResidualCache = 10

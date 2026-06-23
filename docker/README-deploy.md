@@ -13,7 +13,7 @@ bash docker/docker/build-off-board.sh
 
 Артефакты в каталоге `docker/`:
 
-- `navigator-1-YYYYMMDD.tar.gz` — Docker-образ
+- `navigator-2-rawlog-YYYYMMDD.tar.gz` — Docker-образ (`navigator:2-rawlog`)
 - `NavigatorDockerApp-YYYYMMDD.tar.gz` — deploy bundle
 
 ## Установка на целевой машине

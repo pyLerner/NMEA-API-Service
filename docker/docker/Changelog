@@ -1,3 +1,9 @@
+# v2-rawlog
+- Секция `[Log]` в TOML: `LogDir`, `LogName`, `LogLevel`, `MaxLogs`, `MaxSize`, `LogRowNMEA`, `RowNMEA`.
+- Опциональный сырой лог NMEA (`LogRowNMEA = yes`) — все строки с входа в отдельный файл с той же ротацией.
+- `[Memory].ResidualCache` — новейшие записи остаются в кэше после flush; в БД уходит `CacheRecords - ResidualCache` старейших (без дублей).
+- Docker-образ: `navigator:2-rawlog`.
+
 # v1.0.6 
 - Добавлен API endpoint 
 ```POST /SendIrma 

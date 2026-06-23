@@ -21,7 +21,7 @@
 - Асинхронный рантайм: reader + flusher + API server в одном процессе.
 - Два набора HTTP-маршрутов: **v2** (публичные данные + ping) и **legacy** с Bearer-токеном.
 - Гибкий источник входных данных: serial / file / stdin.
-- Ограниченный in-memory кэш с триггером flush в БД.
+- Ограниченный in-memory кэш с частичным flush в БД и остаточным хвостом (`ResidualCache`).
 - Retention-аудит таблицы SQLite по лимиту строк.
 
 ## Архитектура
@@ -51,7 +51,7 @@ flowchart LR
 2. Инициализируются логгер, SQLite и `RecordsCache`.
 3. Поднимаются три async-задачи:
    - `nmea_reader_task`: читает строки, обновляет satellites из GGA, парсит RMC, пишет в кэш;
-   - `db_flusher_task`: по событию flush сохраняет все записи кэша в SQLite и применяет retention;
+   - `db_flusher_task`: по событию flush сохраняет `CacheRecords - ResidualCache` старейших записей в SQLite; `ResidualCache` новейших остаются в кэше;
    - FastAPI/Uvicorn server: обслуживает HTTP-запросы.
 4. При `SIGINT/SIGTERM` выполняется graceful shutdown и закрытие DB-соединения.
 
@@ -95,11 +95,19 @@ uv sync --group dev
 - `[System]`
   - `ProgramDirectory` — служебный каталог приложения;
   - `Input` — путь к входному файлу NMEA (если непустой, выбирается file-режим);
-  - `Stdin` — если `true`, выбирается stdin-режим (когда `Input` пустой);
-  - `LogDir` — каталог логов.
+  - `Stdin` — если `true`, выбирается stdin-режим (когда `Input` пустой).
+- `[Log]`
+  - `LogDir` — каталог логов;
+  - `LogName` — имя основного лог-файла;
+  - `LogLevel` — уровень (`INFO`, `DEBUG`, …);
+  - `MaxLogs` — число архивов при ротации;
+  - `MaxSize` — размер файла до ротации (`5m`, `512k`, байты);
+  - `LogRowNMEA` — `yes` / `no`: писать сырые строки NMEA в отдельный файл;
+  - `RowNMEA` — имя файла сырого NMEA-лога.
 - `[Memory]`
   - `CacheRecordsLength` — максимальный размер in-memory кэша;
-  - `CacheRecords` — порог новых записей до триггера flush в SQLite.
+  - `CacheRecords` — размер окна flush-цикла (порция в БД + `ResidualCache` в памяти);
+  - `ResidualCache` — число новейших записей, остающихся в кэше после flush (триггер flush: `CacheRecords - ResidualCache` новых записей).
 
 Приоритет источника входных данных:
 1. `System.Input` (файл), если задан;

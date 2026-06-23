@@ -8,8 +8,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOCKER_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-IMAGE_TAG="${IMAGE_TAG:-navigator:1}"
-EXPORT_TAR_DEFAULT="${DOCKER_DIR}/navigator-1-$(date +%Y%m%d).tar.gz"
+IMAGE_TAG="${IMAGE_TAG:-navigator:2-rawlog}"
+EXPORT_TAR_DEFAULT="${DOCKER_DIR}/navigator-2-rawlog-$(date +%Y%m%d).tar.gz"
 BUNDLE_DIR_NAME="${BUNDLE_DIR_NAME:-NavigatorDockerApp}"
 BUNDLE_TAR_DEFAULT="${DOCKER_DIR}/${BUNDLE_DIR_NAME}-$(date +%Y%m%d).tar.gz"
 BUILDER_NAME="${BUILDER_NAME:-navigator-builder}"

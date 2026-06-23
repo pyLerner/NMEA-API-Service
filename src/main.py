@@ -1,33 +1,20 @@
 """
-Unified async GNRMC application.
+Единое асинхронное приложение GNRMC.
 
-This script starts:
-- NMEA reader (RS-232/RS-485) that parses $GNRMC/$GPRMC and $GNGGA/$GPGGA,
-  enriches records with satellites count, and appends them to an in-memory cache.
-- API server (FastAPI) that serves last coordinates and cached records with token auth.
-- Database auditor that enforces MaxRows retention policy periodically.
+Запускает:
+- чтение NMEA (RS-232/RS-485 / файл / stdin), парсинг RMC/ECEFPOSVEL и GGA;
+- in-memory кэш с частичным flush в SQLite;
+- HTTP API (FastAPI) для выдачи координат;
+- retention-аудит таблицы SQLite.
 
-Key changes vs. the original:
-- Single entry point launches all tasks concurrently.
-- In-memory cache (deque) size configured in [Memory].CacheRecordsLength.
-- Flush to DB all cache contents when CacheRecords new items were added since last flush.
-- Table schema extended with satellites_count.
-- /AllCoords returns cached data (not DB).
-- Fully asynchronous implementation using aiosqlite and FastAPI.
-- Rich type annotations, docstrings, and verbose comments.
-
-Dependencies:
-- fastapi, uvicorn[standard], aiosqlite
-- pyserial-asyncio (for async serial port; optional if you read from file/stdin)
-  Install: pip install fastapi uvicorn[standard] aiosqlite pyserial-asyncio
-
-Author: Vadim's unified GNRMC rewrite
+Конфигурация: TOML (--config), секции [Log], [Memory], [Database], …
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 import signal
 from pathlib import Path
 from typing import Any
@@ -47,6 +34,7 @@ from log_config.log_config import setup_logger
 from models.data_models import load_config
 
 # Task Runner
+from debug_trace import debug_log
 from runner_task import db_flusher_task, nmea_reader_task
 
 # =============================================================================
@@ -66,14 +54,12 @@ async def main_async(args: argparse.Namespace) -> None:
     config_path = Path(args.config)
     cfg = load_config(config_path)
 
-    # Logger
-    Path(cfg.system.log_dir).mkdir(parents=True, exist_ok=True)
-    log_file = Path(cfg.system.log_dir).joinpath("gnrmc.log")
-    logger = setup_logger(log_file)
+    logger, nmea_row_logger = setup_logger(cfg.log)
 
     logger.info("=== GNRMC Unified App starting ===")
     logger.info(
-        "Config: %s | DB=%s | MaxRows=%d | Host=%s:%d | Workers=%d | CacheLen=%d | CacheTrigger=%d",
+        "Config: %s | DB=%s | MaxRows=%d | Host=%s:%d | Workers=%d | "
+        "CacheLen=%d | FlushBatch=%d | ResidualCache=%d | LogRowNMEA=%s",
         config_path,
         cfg.database.db_path,
         cfg.database.max_rows,
@@ -81,15 +67,33 @@ async def main_async(args: argparse.Namespace) -> None:
         cfg.api.port,
         cfg.api.workers,
         cfg.memory.cache_records_length,
-        cfg.memory.cache_records_trigger,
+        cfg.memory.flush_batch,
+        cfg.memory.residual_cache,
+        cfg.log.log_row_nmea,
     )
+    # #region agent log
+    debug_log(
+        "main.py:startup",
+        "app starting",
+        {
+            "db_path": cfg.database.db_path,
+            "workers": cfg.api.workers,
+            "cache_trigger": cfg.memory.flush_batch,
+            "serial_port": cfg.hardware.port,
+        },
+        hypothesis_id="A,B",
+    )
+    # #endregion
 
     # DB
     db_conn = await init_db(cfg.database.db_path, logger)
 
     # Cache
     cache = RecordsCache(
-        cfg.memory.cache_records_length, cfg.memory.cache_records_trigger, logger
+        cfg.memory.cache_records_length,
+        cfg.memory.cache_records_trigger,
+        cfg.memory.residual_cache,
+        logger,
     )
 
     # Create API
@@ -102,29 +106,53 @@ async def main_async(args: argparse.Namespace) -> None:
     import uvicorn
 
     config = uvicorn.Config(
-        app=app, 
-        host=cfg.api.host, 
+        app=app,
+        host=cfg.api.host,
         port=cfg.api.port,
-        workers=cfg.api.workers, 
-        log_level="info", 
-        loop="asyncio"
+        workers=cfg.api.workers,
+        log_level=logging.getLevelName(cfg.log.log_level).lower(),
+        loop="asyncio",
     )
     server = uvicorn.Server(config=config)
 
     # Tasks: reader, flusher, api
     reader_t = asyncio.create_task(
-        nmea_reader_task(cfg, cache, logger), name="nmea_reader"
+        nmea_reader_task(cfg, cache, logger, nmea_row_logger), name="nmea_reader"
     )
     flusher_t = asyncio.create_task(
         db_flusher_task(cfg, cache, db_conn, logger), name="db_flusher"
     )
     api_t = asyncio.create_task(server.serve(), name="api_server")
 
+    async def _heartbeat_task() -> None:
+        beat = 0
+        while True:
+            await asyncio.sleep(5)
+            beat += 1
+            # #region agent log
+            debug_log(
+                "main.py:heartbeat",
+                "app alive",
+                {"beat": beat, "reader_done": reader_t.done(), "api_done": api_t.done()},
+                hypothesis_id="A,E",
+            )
+            # #endregion
+
+    heartbeat_t = asyncio.create_task(_heartbeat_task(), name="heartbeat")
+
     # Graceful shutdown handling
     shutdown_event = asyncio.Event()
 
     def _handle_signal(sig: int, frame: Any | None) -> None:
         logger.info("Received signal %s, shutting down...", sig)
+        # #region agent log
+        debug_log(
+            "main.py:signal",
+            "shutdown signal received",
+            {"signal": sig},
+            hypothesis_id="A,E",
+        )
+        # #endregion
         shutdown_event.set()
 
     for s in (signal.SIGINT, signal.SIGTERM):
@@ -137,10 +165,24 @@ async def main_async(args: argparse.Namespace) -> None:
     # Wait for shutdown event
     await shutdown_event.wait()
 
+    # #region agent log
+    debug_log(
+        "main.py:shutdown",
+        "shutdown_event set, cancelling tasks",
+        {
+            "reader_done": reader_t.done(),
+            "flusher_done": flusher_t.done(),
+            "api_done": api_t.done(),
+            "api_exc": str(api_t.exception()) if api_t.done() and api_t.exception() else None,
+        },
+        hypothesis_id="A,B,E",
+    )
+    # #endregion
+
     # Cancel background tasks
-    for t in (reader_t, flusher_t):
+    for t in (reader_t, flusher_t, heartbeat_t):
         t.cancel()
-    await asyncio.gather(reader_t, flusher_t, return_exceptions=True)
+    await asyncio.gather(reader_t, flusher_t, heartbeat_t, return_exceptions=True)
 
     # Stop API server if running
     if server:

@@ -1,6 +1,6 @@
 services:
   navigator:
-    image: navigator:1
+    image: navigator:2-rawlog
     container_name: navigator
     restart: unless-stopped
     network_mode: host

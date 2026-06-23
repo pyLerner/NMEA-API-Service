@@ -14,6 +14,7 @@ from models.data_models import (
     AppConfig,
     DatabaseConfig,
     HardwareConfig,
+    LogConfig,
     MemoryConfig,
     SystemConfig,
 )
@@ -35,9 +36,21 @@ def _make_cfg(input_path: str) -> AppConfig:
             program_directory="/tmp",
             input_path=input_path,
             stdin=False,
-            log_dir="logs",
         ),
-        memory=MemoryConfig(cache_records_length=100, cache_records_trigger=1000),
+        log=LogConfig(
+            log_dir=str(Path(input_path).parent / "logs"),
+            log_name="gnrmc.log",
+            log_level=logging.INFO,
+            max_logs=5,
+            max_size_bytes=5_242_880,
+            log_row_nmea=False,
+            row_nmea_name="nmea-row.log",
+        ),
+        memory=MemoryConfig(
+            cache_records_length=100,
+            cache_records_trigger=1000,
+            residual_cache=10,
+        ),
     )
 
 
@@ -55,7 +68,7 @@ async def _run_reader(cfg: AppConfig, cache: RecordsCache, logger: logging.Logge
 def test_reader_ecef_only_populates_cache(tmp_path: Path) -> None:
     nmea_file = tmp_path / "ecef.nmea"
     nmea_file.write_text(REVKECEF, encoding="utf-8")
-    cache = RecordsCache(100, 1000, _null_logger())
+    cache = RecordsCache(100, 1000, 10, _null_logger())
     cfg = _make_cfg(str(nmea_file))
 
     asyncio.run(_run_reader(cfg, cache, _null_logger()))
@@ -69,7 +82,7 @@ def test_reader_ecef_only_populates_cache(tmp_path: Path) -> None:
 def test_reader_rmc_blocks_ecef_fallback(tmp_path: Path) -> None:
     nmea_file = tmp_path / "mixed.nmea"
     nmea_file.write_text(SAMPLE_RMC + REVKECEF, encoding="utf-8")
-    cache = RecordsCache(100, 1000, _null_logger())
+    cache = RecordsCache(100, 1000, 10, _null_logger())
     cfg = _make_cfg(str(nmea_file))
 
     asyncio.run(_run_reader(cfg, cache, _null_logger()))

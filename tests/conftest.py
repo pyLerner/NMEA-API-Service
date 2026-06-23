@@ -17,6 +17,7 @@ from models.data_models import (
     AppConfig,
     DatabaseConfig,
     HardwareConfig,
+    LogConfig,
     MemoryConfig,
     SystemConfig,
 )
@@ -34,9 +35,21 @@ def _make_cfg(db_path: Path) -> AppConfig:
             program_directory="/tmp",
             input_path="",
             stdin=False,
-            log_dir="logs",
         ),
-        memory=MemoryConfig(cache_records_length=500, cache_records_trigger=100),
+        log=LogConfig(
+            log_dir="logs",
+            log_name="gnrmc.log",
+            log_level=logging.INFO,
+            max_logs=5,
+            max_size_bytes=5_242_880,
+            log_row_nmea=False,
+            row_nmea_name="nmea-row.log",
+        ),
+        memory=MemoryConfig(
+            cache_records_length=500,
+            cache_records_trigger=100,
+            residual_cache=10,
+        ),
     )
 
 
@@ -73,6 +86,7 @@ def cache(app_config: AppConfig, logger: logging.Logger) -> RecordsCache:
     return RecordsCache(
         app_config.memory.cache_records_length,
         app_config.memory.cache_records_trigger,
+        app_config.memory.residual_cache,
         logger,
     )
 

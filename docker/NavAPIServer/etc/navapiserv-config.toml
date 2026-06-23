@@ -16,8 +16,17 @@ Token = "A0473A67-27A1-3C05-A2D1-5C134639347F"
 ProgramDirectory = "/app"
 Input = ""
 Stdin = false
+
+[Log]
 LogDir = "/log/navapiserv"
+LogName = "gnrmc.log"
+LogLevel = "INFO"
+MaxLogs = 5
+MaxSize = "5m"
+LogRowNMEA = "no"
+RowNMEA = "nmea-row.log"
 
 [Memory]
 CacheRecordsLength = 5000
 CacheRecords = 100
+ResidualCache = 10
