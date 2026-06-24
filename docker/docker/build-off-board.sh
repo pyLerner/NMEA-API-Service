@@ -86,6 +86,7 @@ build_deploy_bundle() {
     --exclude 'NavigatorDockerApp-*.tar.gz' \
     "${DOCKER_DIR}/" "${bundle_project}/"
   cp "${SCRIPT_DIR}/docker-compose.yml" "${bundle_project}/docker-compose.yml"
+  printf '%s\n' "${IMAGE_TAG}" > "${bundle_project}/IMAGE_TAG"
   cp "${EXPORT_TAR_PATH}" "${bundle_root}/${image_basename}"
   cp "${DOCKER_DIR}/install-docker-from-tar.sh" "${bundle_root}/"
   chmod +x "${bundle_root}/install-docker-from-tar.sh"

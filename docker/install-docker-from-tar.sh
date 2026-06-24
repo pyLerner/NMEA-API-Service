@@ -32,6 +32,7 @@ EOF
 }
 
 log() { printf '%s\n' "$*"; }
+warn() { printf 'WARNING: %s\n' "$*" >&2; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 need_cmd() {
@@ -108,10 +109,55 @@ resolve_compose_rel_path() {
   fi
   if [[ -f "${root}/docker-compose.yml" ]]; then
     COMPOSE_REL_PATH="docker-compose.yml"
-  elif [[ -f "${root}/docker/docker-compose.yml" ]]; then
+    return 0
+  fi
+  if [[ -f "${root}/docker/docker-compose.yml" ]]; then
+    warn "Используется устаревший путь docker/docker-compose.yml; ожидается ${root}/docker-compose.yml"
     COMPOSE_REL_PATH="docker/docker-compose.yml"
+    return 0
+  fi
+  die "не найден compose в ${root} (ожидается docker-compose.yml)"
+}
+
+load_image_from_tar() {
+  local tar_path="$1"
+  local load_out loaded=""
+  load_out=$(gunzip -c "$tar_path" | docker load 2>&1)
+  printf '%s\n' "$load_out" >&2
+  loaded=$(printf '%s\n' "$load_out" | sed -n 's/^Loaded image: //p' | tail -n 1)
+  if [[ -z "$loaded" && -f "${2:-}/IMAGE_TAG" ]]; then
+    loaded=$(tr -d ' \t\r\n' < "${2}/IMAGE_TAG")
+    warn "Тег из docker load не распознан; используется IMAGE_TAG: ${loaded}"
+  fi
+  [[ -n "$loaded" ]] || die "не удалось определить тег образа после docker load"
+  printf '%s' "$loaded"
+}
+
+patch_compose_for_offline() {
+  local compose_file="$1"
+  local image="$2"
+  [[ -f "$compose_file" ]] || die "compose не найден: $compose_file"
+
+  if grep -qE '^[[:space:]]*image:' "$compose_file"; then
+    sed -i -E "s|^[[:space:]]*image:.*|    image: ${image}|" "$compose_file"
   else
-    die "не найден compose в ${root} (ожидается docker-compose.yml)"
+    die "в ${compose_file} нет строки image:"
+  fi
+
+  if grep -qE '^[[:space:]]*pull_policy:' "$compose_file"; then
+    sed -i -E 's/^[[:space:]]*pull_policy:.*/    pull_policy: never/' "$compose_file"
+  else
+    sed -i -E "/^[[:space:]]*image:/a\\    pull_policy: never" "$compose_file"
+  fi
+
+  log "Compose ${compose_file}: image=${image}, pull_policy=never"
+}
+
+remove_legacy_compose() {
+  local root="$1"
+  if [[ -f "${root}/docker-compose.yml" && -f "${root}/docker/docker-compose.yml" ]]; then
+    log "Удаляю устаревший ${root}/docker/docker-compose.yml (используется docker-compose.yml в корне)"
+    rm -f "${root}/docker/docker-compose.yml"
   fi
 }
 
@@ -182,6 +228,7 @@ main() {
   fi
 
   resolve_compose_rel_path "${project_root}"
+  remove_legacy_compose "${project_root}"
 
   local compose_file="${project_root}/${COMPOSE_REL_PATH}"
   [[ -f "$compose_file" ]] || die "не найден compose: $compose_file (COMPOSE_REL_PATH=${COMPOSE_REL_PATH})"
@@ -190,7 +237,10 @@ main() {
   stop_existing_container "$DEFAULT_CONTAINER_NAME"
 
   log "Загрузка образа из ${tar_path} …"
-  gunzip -c "$tar_path" | docker load
+  local loaded_image
+  loaded_image=$(load_image_from_tar "$tar_path" "$project_root")
+
+  patch_compose_for_offline "$compose_file" "$loaded_image"
 
   if (( no_up )); then
     log "Готово (--no-up: контейнер не запускался)."
