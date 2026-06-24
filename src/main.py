@@ -34,7 +34,8 @@ from log_config.log_config import setup_logger
 from models.data_models import load_config
 
 # Task Runner
-from runner_task import db_flusher_task, nmea_reader_task
+from runner_task import db_flusher_task, fusion_output_task, nmea_reader_task
+from navigation.fusion import NavFusion
 
 # =============================================================================
 # Entry point and orchestration
@@ -69,6 +70,8 @@ async def main_async(args: argparse.Namespace) -> None:
         cfg.memory.flush_batch,
         cfg.memory.residual_cache,
         cfg.log.log_row_nmea,
+        cfg.navigation.profile_name,
+        cfg.navigation.output_rate_hz,
     )
 
     # DB
@@ -101,9 +104,15 @@ async def main_async(args: argparse.Namespace) -> None:
     )
     server = uvicorn.Server(config=config)
 
-    # Tasks: reader, flusher, api
+    fusion = NavFusion(cfg.navigation.profile)
+
+    # Tasks: reader, fusion output, flusher, api
     reader_t = asyncio.create_task(
-        nmea_reader_task(cfg, cache, logger, nmea_row_logger), name="nmea_reader"
+        nmea_reader_task(cfg, cache, logger, nmea_row_logger, fusion),
+        name="nmea_reader",
+    )
+    fusion_t = asyncio.create_task(
+        fusion_output_task(cfg, fusion, cache, logger), name="fusion_output"
     )
     flusher_t = asyncio.create_task(
         db_flusher_task(cfg, cache, db_conn, logger), name="db_flusher"
@@ -128,9 +137,9 @@ async def main_async(args: argparse.Namespace) -> None:
     await shutdown_event.wait()
 
     # Cancel background tasks
-    for t in (reader_t, flusher_t):
+    for t in (reader_t, fusion_t, flusher_t):
         t.cancel()
-    await asyncio.gather(reader_t, flusher_t, return_exceptions=True)
+    await asyncio.gather(reader_t, fusion_t, flusher_t, return_exceptions=True)
 
     # Stop API server if running
     if server:

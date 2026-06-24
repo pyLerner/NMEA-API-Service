@@ -94,7 +94,8 @@ def create_app(cfg: AppConfig, cache: RecordsCache, logger: logging.Logger) -> F
                         direction,
                         mode,
                         satellites_count,
-                        source
+                        source,
+                        quality
                 FROM gnrmc
                 ORDER BY key_id DESC
                 LIMIT ? OFFSET ?

@@ -1,5 +1,5 @@
 # =============================================================================
-# nmea_reader_task: RMC priority and ECEFPOSVEL fallback
+# nmea_reader_task + NavFusion integration
 # =============================================================================
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import asyncio
 import logging
 from pathlib import Path
 
-import pytest
 from db.cache import RecordsCache
 from models.data_models import (
     ApiConfig,
@@ -18,7 +17,10 @@ from models.data_models import (
     MemoryConfig,
     SystemConfig,
 )
+from navigation.fusion import NavFusion
 from runner_task import nmea_reader_task
+
+from conftest import _default_navigation
 
 REVKECEF = (
     "$ECEFPOSVEL,124015.000,3985352.629186,-54462.755461,"
@@ -51,6 +53,7 @@ def _make_cfg(input_path: str) -> AppConfig:
             cache_records_trigger=1000,
             residual_cache=10,
         ),
+        navigation=_default_navigation(),
     )
 
 
@@ -62,10 +65,11 @@ def _null_logger() -> logging.Logger:
 
 
 async def _run_reader(cfg: AppConfig, cache: RecordsCache, logger: logging.Logger) -> None:
-    await nmea_reader_task(cfg, cache, logger)
+    fusion = NavFusion(cfg.navigation.profile)
+    await nmea_reader_task(cfg, cache, logger, None, fusion)
 
 
-def test_reader_ecef_only_populates_cache(tmp_path: Path) -> None:
+def test_reader_ecef_without_rmc_does_not_publish(tmp_path: Path) -> None:
     nmea_file = tmp_path / "ecef.nmea"
     nmea_file.write_text(REVKECEF, encoding="utf-8")
     cache = RecordsCache(100, 1000, 10, _null_logger())
@@ -74,14 +78,12 @@ def test_reader_ecef_only_populates_cache(tmp_path: Path) -> None:
     asyncio.run(_run_reader(cfg, cache, _null_logger()))
 
     snapshot = asyncio.run(cache.snapshot())
-    assert len(snapshot) == 1
-    assert snapshot[0].source == "ecef"
-    assert snapshot[0].is_valid == "A"
+    assert len(snapshot) == 0
 
 
-def test_reader_rmc_blocks_ecef_fallback(tmp_path: Path) -> None:
-    nmea_file = tmp_path / "mixed.nmea"
-    nmea_file.write_text(SAMPLE_RMC + REVKECEF, encoding="utf-8")
+def test_reader_rmc_publishes_good_quality(tmp_path: Path) -> None:
+    nmea_file = tmp_path / "rmc.nmea"
+    nmea_file.write_text(SAMPLE_RMC, encoding="utf-8")
     cache = RecordsCache(100, 1000, 10, _null_logger())
     cfg = _make_cfg(str(nmea_file))
 
@@ -90,3 +92,17 @@ def test_reader_rmc_blocks_ecef_fallback(tmp_path: Path) -> None:
     snapshot = asyncio.run(cache.snapshot())
     assert len(snapshot) == 1
     assert snapshot[0].source == "nmea"
+    assert snapshot[0].quality == "GOOD"
+
+
+def test_reader_rmc_then_ecef_uses_fusion(tmp_path: Path) -> None:
+    nmea_file = tmp_path / "mixed.nmea"
+    nmea_file.write_text(SAMPLE_RMC + REVKECEF, encoding="utf-8")
+    cache = RecordsCache(100, 1000, 10, _null_logger())
+    cfg = _make_cfg(str(nmea_file))
+
+    asyncio.run(_run_reader(cfg, cache, _null_logger()))
+
+    snapshot = asyncio.run(cache.snapshot())
+    assert len(snapshot) >= 1
+    assert snapshot[0].quality == "GOOD"

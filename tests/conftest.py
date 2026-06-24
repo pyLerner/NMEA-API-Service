@@ -12,6 +12,7 @@ import pytest
 from api_server import create_app
 from db.cache import RecordsCache
 from db.sql import init_db
+from starlette.testclient import TestClient
 from models.data_models import (
     ApiConfig,
     AppConfig,
@@ -19,11 +20,27 @@ from models.data_models import (
     HardwareConfig,
     LogConfig,
     MemoryConfig,
+    NavigationConfig,
     SystemConfig,
+    _load_navigation_config,
 )
-from starlette.testclient import TestClient
 
 TEST_TOKEN = "test-bearer-token-for-api-tests"
+PROJECT_ETC = Path(__file__).resolve().parent.parent / "etc"
+
+
+def _default_navigation() -> NavigationConfig:
+    return _load_navigation_config(
+        {
+            "Navigation": {
+                "Profile": "tram",
+                "VehicleProfilesPath": "VehicleProfiles.toml",
+                "OutputRateHz": 1,
+                "SerialRestartOnRmcLoss": "no",
+            }
+        },
+        PROJECT_ETC,
+    )
 
 
 def _make_cfg(db_path: Path) -> AppConfig:
@@ -50,6 +67,7 @@ def _make_cfg(db_path: Path) -> AppConfig:
             cache_records_trigger=100,
             residual_cache=10,
         ),
+        navigation=_default_navigation(),
     )
 
 

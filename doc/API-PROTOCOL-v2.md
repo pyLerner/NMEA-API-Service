@@ -49,7 +49,10 @@
 | `direction` | `number \| null` | Курс (градусы). |
 | `mode` | `"E" \| "D" \| "A" \| "N" \| null` | Режим. |
 | `satellites-count` | `integer \| null` | Число спутников. |
-| `source` | `"nmea" \| "ecef" \| null` | Источник данных (`nmea` — RMC, `ecef` — ECEFPOSVEL). |
+| `source` | `"nmea" \| "ecef" \| "fusion" \| null` | Источник последнего измерения, повлиявшего на точку. |
+| `nav-quality` | `"GOOD" \| "KF_ECEF" \| "COAST" \| "DEGRADED" \| "LOST" \| null` | Режим fusion-слоя (см. `plan/KALMAN-ECEF-PLAN.md`). `null` — legacy-запись до fusion. |
+
+При `nav-quality` = `LOST` новые точки в кэш не публикуются; `last-coords` возвращает последнюю доступную запись до потери сигнала.
 
 ## 4. Эндпоинты
 

@@ -30,3 +30,9 @@ RowNMEA = "nmea-row.log"
 CacheRecordsLength = 5000
 CacheRecords = 100
 ResidualCache = 10
+
+[Navigation]
+Profile = "tram"
+VehicleProfilesPath = "VehicleProfiles.toml"
+OutputRateHz = 10
+SerialRestartOnRmcLoss = "yes"

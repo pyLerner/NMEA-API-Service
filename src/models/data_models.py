@@ -109,6 +109,48 @@ class LogConfig:
     row_nmea_name: str
 
 
+_VALID_PROFILES = frozenset({"tram", "bus", "custom"})
+
+_VEHICLE_PROFILE_KEYS = {
+    "VMaxKmh": "v_max_kmh",
+    "AMax": "a_max",
+    "THoldSec": "t_hold_sec",
+    "TLostSec": "t_lost_sec",
+    "FrozenJumpM": "frozen_jump_m",
+    "StandstillPosM": "standstill_pos_m",
+    "StandstillSec": "standstill_sec",
+    "InnovGateSigma": "innov_gate_sigma",
+    "InnovGateMinM": "innov_gate_min_m",
+    "RmcInvalidInflate": "rmc_invalid_inflate",
+    "SerialRestartAfterSec": "serial_restart_after_sec",
+}
+
+
+@dataclass(frozen=True)
+class VehicleProfile:
+    v_max_kmh: float
+    a_max: float
+    t_hold_sec: float
+    t_lost_sec: float
+    frozen_jump_m: float
+    standstill_pos_m: float
+    standstill_sec: int
+    innov_gate_sigma: float
+    innov_gate_min_m: float
+    rmc_invalid_inflate: float
+    serial_restart_after_sec: float
+
+
+@dataclass(frozen=True)
+class NavigationConfig:
+    profile_name: str
+    vehicle_profiles_path: Path
+    profile: VehicleProfile
+    output_rate_hz: int
+    serial_restart_on_rmc_loss: bool
+    serial_restart_after_sec: float
+
+
 @dataclass(frozen=True)
 class MemoryConfig:
     """
@@ -139,6 +181,7 @@ class AppConfig:
     system: SystemConfig
     log: LogConfig
     memory: MemoryConfig
+    navigation: NavigationConfig
 
 
 def _load_log_config(raw: dict, sys_: dict) -> LogConfig:
@@ -155,6 +198,93 @@ def _load_log_config(raw: dict, sys_: dict) -> LogConfig:
         max_size_bytes=parse_max_size(log.get("MaxSize", "5m")),
         log_row_nmea=parse_yes_no(log.get("LogRowNMEA", "no"), "LogRowNMEA"),
         row_nmea_name=str(log.get("RowNMEA", "nmea-row.log")),
+    )
+
+
+def _load_vehicle_profile(path: Path, section: str) -> VehicleProfile:
+    if not path.exists():
+        raise FileNotFoundError(f"VehicleProfiles not found: {path}")
+    with open(path, "rb") as f:
+        raw = tomllib.load(f)
+    if section not in raw:
+        raise ValueError(
+            f"Profile section [{section}] not found in {path}"
+        )
+    sec = raw[section]
+    kwargs: dict[str, float | int] = {}
+    for toml_key, field in _VEHICLE_PROFILE_KEYS.items():
+        if toml_key not in sec:
+            raise ValueError(
+                f"Missing {toml_key} in [{section}] of {path}"
+            )
+        val = sec[toml_key]
+        if toml_key == "StandstillSec":
+            kwargs[field] = int(val)
+        else:
+            kwargs[field] = float(val)
+    return VehicleProfile(**kwargs)  # type: ignore[arg-type]
+
+
+def _validate_vehicle_profile(profile: VehicleProfile) -> None:
+    if profile.v_max_kmh <= 0:
+        raise ValueError("VMaxKmh must be > 0")
+    if profile.a_max <= 0:
+        raise ValueError("AMax must be > 0")
+    if profile.frozen_jump_m <= 0:
+        raise ValueError("FrozenJumpM must be > 0")
+    if profile.t_hold_sec >= profile.t_lost_sec:
+        raise ValueError("THoldSec must be < TLostSec")
+
+
+def _load_navigation_config(raw: dict, config_dir: Path) -> NavigationConfig:
+    nav = raw.get("Navigation", {})
+    profile_name = str(nav.get("Profile", "tram")).strip().lower()
+    if profile_name not in _VALID_PROFILES:
+        raise ValueError(
+            f"Navigation.Profile must be one of {sorted(_VALID_PROFILES)}, "
+            f"got {profile_name!r}"
+        )
+
+    profiles_rel = nav.get("VehicleProfilesPath", "VehicleProfiles.toml")
+    profiles_path = Path(profiles_rel)
+    if not profiles_path.is_absolute():
+        profiles_path = config_dir / profiles_path
+    if not profiles_path.exists():
+        bundled = Path(__file__).resolve().parent.parent.parent / "etc" / Path(
+            profiles_rel
+        ).name
+        if bundled.exists():
+            profiles_path = bundled
+
+    profile = _load_vehicle_profile(profiles_path, profile_name)
+    _validate_vehicle_profile(profile)
+
+    output_rate_hz = int(nav.get("OutputRateHz", 10))
+    if not 1 <= output_rate_hz <= 20:
+        raise ValueError("OutputRateHz must be in [1, 20]")
+
+    serial_restart_on = parse_yes_no(
+        nav.get("SerialRestartOnRmcLoss", "yes"), "SerialRestartOnRmcLoss"
+    )
+    restart_override = nav.get("SerialRestartAfterSec")
+    serial_restart_after = (
+        float(restart_override)
+        if restart_override is not None
+        else profile.serial_restart_after_sec
+    )
+    if serial_restart_after < profile.t_lost_sec:
+        raise ValueError(
+            "SerialRestartAfterSec must be >= TLostSec "
+            f"(got {serial_restart_after} < {profile.t_lost_sec})"
+        )
+
+    return NavigationConfig(
+        profile_name=profile_name,
+        vehicle_profiles_path=profiles_path,
+        profile=profile,
+        output_rate_hz=output_rate_hz,
+        serial_restart_on_rmc_loss=serial_restart_on,
+        serial_restart_after_sec=serial_restart_after,
     )
 
 
@@ -200,6 +330,9 @@ def load_config(path: Path) -> AppConfig:
     )
     _validate_memory_config(memory)
 
+    config_dir = path.parent
+    navigation = _load_navigation_config(raw, config_dir)
+
     return AppConfig(
         database=DatabaseConfig(
             db_path=db.get("DB", "data/gnrmc.db"),
@@ -222,4 +355,5 @@ def load_config(path: Path) -> AppConfig:
         ),
         log=_load_log_config(raw, sys_),
         memory=memory,
+        navigation=navigation,
     )

@@ -12,6 +12,60 @@ except Exception:
     serial_asyncio = None  # graceful fallback to file/stdin
 
 
+async def iter_reopenable_serial_lines(port: str, baud: int):
+    """
+    Async iterator over serial lines with ``reopen()`` for port recovery.
+    """
+    if serial_asyncio is None:
+        raise RuntimeError(
+            "pyserial-asyncio is not installed. Install via 'uv pip install pyserial-asyncio'."
+        )
+
+    class ReopenableSerial:
+        def __init__(self, port_: str, baud_: int) -> None:
+            self._port = port_
+            self._baud = baud_
+            self._reader = None
+            self._transport = None
+
+        async def _open(self) -> None:
+            self._reader, self._transport = await serial_asyncio.open_serial_connection(
+                url=self._port,
+                baudrate=self._baud,
+                limit=256 * 1024,
+            )
+
+        async def reopen(self) -> None:
+            if self._transport is not None:
+                self._transport.close()
+            self._reader = None
+            self._transport = None
+            await asyncio.sleep(0.5)
+            await self._open()
+
+        def __aiter__(self):
+            return self._iter_lines()
+
+        async def _iter_lines(self):
+            await self._open()
+            while True:
+                try:
+                    line = await self._reader.readline()
+                    if not line:
+                        await asyncio.sleep(0.05)
+                        continue
+                    decoded = line.decode("ascii", errors="ignore").strip()
+                    if decoded.startswith(("$", "!")):
+                        yield decoded
+                except ValueError as e:
+                    if "chunk exceed the limit" in str(e):
+                        await self._reader.read(1024)
+                        continue
+                    raise
+
+    return ReopenableSerial(port, baud)
+
+
 async def iter_serial_lines(port: str, baud: int) -> AsyncIterator[str]:
     """
     Async iterator over lines from a serial port.

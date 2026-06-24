@@ -23,6 +23,18 @@ async def _ensure_source_column(
         logger.info("Added source column to gnrmc")
 
 
+async def _ensure_quality_column(
+    conn: aiosqlite.Connection, logger: logging.Logger
+) -> None:
+    async with conn.execute("PRAGMA table_info(gnrmc)") as cur:
+        rows = await cur.fetchall()
+    columns = {row[1] for row in rows}
+    if "quality" not in columns:
+        await conn.execute("ALTER TABLE gnrmc ADD COLUMN quality TEXT")
+        await conn.commit()
+        logger.info("Added quality column to gnrmc")
+
+
 async def init_db(db_path: str, logger: logging.Logger) -> aiosqlite.Connection:
     """
     Initialize the SQLite database (create table if not exists) and PRAGMAs.
@@ -48,12 +60,14 @@ async def init_db(db_path: str, logger: logging.Logger) -> aiosqlite.Connection:
             mode CHAR(1),
             satellites_count INTEGER,
             delivered INTEGER NOT NULL DEFAULT 0,
-            source TEXT NOT NULL DEFAULT 'nmea'
+            source TEXT NOT NULL DEFAULT 'nmea',
+            quality TEXT
         )
         """
     )
     await conn.commit()
     await _ensure_source_column(conn, logger)
+    await _ensure_quality_column(conn, logger)
     logger.info("DB initialized at %s", db_path)
     return conn
 
@@ -69,10 +83,10 @@ async def insert_many(
     async with conn.execute("BEGIN"):
         await conn.executemany(
             """
-            INSERT INTO gnrmc (
-                datetime, is_valid, latitude, latitude_hemi, longitude, longitude_hemi,
-                speed, direction, mode, satellites_count, source
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO gnrmc (
+            datetime, is_valid, latitude, latitude_hemi, longitude, longitude_hemi,
+            speed, direction, mode, satellites_count, source, quality
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -87,6 +101,7 @@ async def insert_many(
                     r.mode,
                     r.satellites_count,
                     r.source or "nmea",
+                    r.quality,
                 )
                 for r in records
             ],

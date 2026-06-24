@@ -24,6 +24,7 @@ class Record:
     mode: Optional[str]
     satellites_count: Optional[int]
     source: Optional[str] = "nmea"
+    quality: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -39,6 +40,7 @@ class Record:
             "mode": self.mode,
             "satellites_count": self.satellites_count,
             "source": self.source,
+            "quality": self.quality,
         }
 
 

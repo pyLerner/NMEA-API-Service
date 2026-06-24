@@ -32,3 +32,9 @@ CacheRecordsLength = 5000
 # Flush window: (CacheRecords - ResidualCache) records go to DB, ResidualCache stay in cache
 CacheRecords = 100
 ResidualCache = 10
+
+[Navigation]
+Profile = "tram"
+VehicleProfilesPath = "VehicleProfiles.toml"
+OutputRateHz = 10
+SerialRestartOnRmcLoss = "yes"

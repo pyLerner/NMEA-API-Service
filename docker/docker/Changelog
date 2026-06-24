@@ -1,3 +1,9 @@
+# v2-kalman-ecef
+- Fusion GNRMC + ECEFPOSVEL (Kalman CV, online 10 Гц).
+- `[Navigation]` + `VehicleProfiles.toml` (tram/bus/custom).
+- SQLite: колонка `quality`.
+- Образ `navigator:2-kalman-ecef`; bundle `NavigatorDockerApp-KF-ECEF-*.tar.gz`.
+
 # v2-rawlog
 - Секция `[Log]` в TOML: `LogDir`, `LogName`, `LogLevel`, `MaxLogs`, `MaxSize`, `LogRowNMEA`, `RowNMEA`.
 - Опциональный сырой лог NMEA (`LogRowNMEA = yes`) — все строки с входа в отдельный файл с той же ротацией.
