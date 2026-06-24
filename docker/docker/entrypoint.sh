@@ -3,6 +3,11 @@
 set -euo pipefail
 
 NAVAPI_CONFIG="/etc/navigator/navapiserv-config.toml"
+# TOML в /etc/navigator/, которые не являются конфигами NDTP_Client
+NAVAPI_ONLY_TOML=(
+    "navapiserv-config.toml"
+    "VehicleProfiles.toml"
+)
 
 log() {
     printf '%s [INFO] %s\n' "$(date -Iseconds)" "$*"
@@ -45,7 +50,14 @@ shopt -u nullglob
 ndtp_configs=()
 for conf in "${configs[@]}"; do
     base="$(basename "$conf")"
-    if [[ "$base" == "navapiserv-config.toml" ]]; then
+    skip=0
+    for navapi_toml in "${NAVAPI_ONLY_TOML[@]}"; do
+        if [[ "$base" == "$navapi_toml" ]]; then
+            skip=1
+            break
+        fi
+    done
+    if ((skip)); then
         continue
     fi
     ndtp_configs+=("$conf")
@@ -66,8 +78,8 @@ else
         fi
 
         ndtp_section="$(awk '/^\[NDTP\]/{flag=1;next}/^\[/{flag=0}flag' "$conf")"
-        host="$(echo "$ndtp_section" | grep -i '^[[:space:]]*Host[[:space:]]*=' | head -n 1 | awk -F'=' '{print $2}' | tr -d ' "')"
-        port="$(echo "$ndtp_section" | grep -i '^[[:space:]]*Port[[:space:]]*=' | head -n 1 | awk -F'=' '{print $2}' | tr -d ' "')"
+        host="$(echo "$ndtp_section" | grep -i '^[[:space:]]*Host[[:space:]]*=' | head -n 1 | awk -F'=' '{print $2}' | tr -d ' "' || true)"
+        port="$(echo "$ndtp_section" | grep -i '^[[:space:]]*Port[[:space:]]*=' | head -n 1 | awk -F'=' '{print $2}' | tr -d ' "' || true)"
 
         if [[ -z "$host" || -z "$port" ]]; then
             err "Could not parse Host or Port inside [NDTP] section of $conf. Skipping."
