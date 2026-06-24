@@ -37,6 +37,7 @@ def _default_navigation() -> NavigationConfig:
                 "VehicleProfilesPath": "VehicleProfiles.toml",
                 "OutputRateHz": 1,
                 "SerialRestartOnRmcLoss": "no",
+                "SerialRestartAfterSec": 90,
             }
         },
         PROJECT_ETC,

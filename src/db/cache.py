@@ -7,6 +7,8 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from api.record_format import format_record_for_api
+
 
 @dataclass
 class Record:
@@ -27,7 +29,7 @@ class Record:
     quality: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        raw = {
             "record_id": self.key_id,
             "time": self.datetime,
             "is_valid": self.is_valid,
@@ -42,6 +44,7 @@ class Record:
             "source": self.source,
             "quality": self.quality,
         }
+        return format_record_for_api(raw)
 
 
 class RecordsCache:

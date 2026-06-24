@@ -5,6 +5,8 @@ MaxRows = 150000
 [Hardware]
 HardwarePort = "/dev/ttyS3"
 Baud = 9600
+# HardwarePort = "/dev/ttyS0"
+# Baud = 19200
 
 [API]
 Host = "0.0.0.0"
@@ -38,3 +40,4 @@ Profile = "tram"
 VehicleProfilesPath = "VehicleProfiles.toml"
 OutputRateHz = 10
 SerialRestartOnRmcLoss = "yes"
+SerialRestartAfterSec = 90

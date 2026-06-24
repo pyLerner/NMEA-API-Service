@@ -101,10 +101,12 @@ def test_v2_last_coords_with_record(client: TestClient, cache) -> None:
     assert body["result"] is True
     rec = body["record"]
     assert rec["record-id"] == 7
+    assert isinstance(rec["record-id"], int)
     assert rec["lat-hemisphere"] == "N"
     assert rec["lon-hemisphere"] == "E"
     assert rec["satellites-count"] == 9
     assert rec["source"] == "nmea"
+    assert rec["speed"] == 0.8
 
 
 # --- v2: GET /api/navigator/v1/all-coords ---
@@ -206,7 +208,15 @@ def test_legacy_last_coords_with_data(client: TestClient, cache, auth_headers) -
     body = r.json()
     assert body["result"] is True
     assert body["record"]["record_id"] == 99
+    assert isinstance(body["record"]["record_id"], int)
     assert body["record"]["source"] == "nmea"
+
+
+def test_legacy_last_coords_cache_without_id(client: TestClient, cache, auth_headers) -> None:
+    asyncio.run(_cache_add(cache, _sample_record(key_id=None)))
+    r = client.get("/LastCoords", headers=auth_headers)
+    assert r.status_code == 200
+    assert r.json()["record"]["record_id"] == 0
 
 
 def test_legacy_all_coords_with_auth(client: TestClient, app_config, auth_headers) -> None:

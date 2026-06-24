@@ -29,9 +29,6 @@
 # InnovGateMinM — минимальный порог innovation по позиции (м), независимо от σ.
 #
 # RmcInvalidInflate — во сколько раз увеличить R при is_valid=V в GNRMC.
-#
-# SerialRestartAfterSec — порог рестарта serial при отсутствии RMC (см. план);
-#   рекомендуется ≥ TLostSec. Может переопределяться в главном [Navigation].
 # =============================================================================
 
 [tram]
@@ -45,7 +42,6 @@ StandstillSec = 3
 InnovGateSigma = 3.0
 InnovGateMinM = 2.0
 RmcInvalidInflate = 8.0
-SerialRestartAfterSec = 90
 
 [bus]
 VMaxKmh = 80
@@ -58,7 +54,6 @@ StandstillSec = 3
 InnovGateSigma = 3.0
 InnovGateMinM = 5.0
 RmcInvalidInflate = 8.0
-SerialRestartAfterSec = 120
 
 [custom]
 VMaxKmh = 40
@@ -71,4 +66,3 @@ StandstillSec = 3
 InnovGateSigma = 3.0
 InnovGateMinM = 3.0
 RmcInvalidInflate = 8.0
-SerialRestartAfterSec = 90

@@ -38,17 +38,17 @@
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| `record-id` | `integer \| null` | Идентификатор записи. |
+| `record-id` | `integer` | Идентификатор записи; `0` если ещё не в БД. |
 | `time` | `string \| null` | ISO8601 UTC timestamp. |
 | `is-valid` | `"A" \| "V" \| null` | Валидность фикса. |
-| `latitude` | `number \| null` | Широта в decimal degrees. |
+| `latitude` | `number` | Широта, **7** decimal places. |
 | `lat-hemisphere` | `"N" \| "S" \| null` | Полушарие широты. |
-| `longitude` | `number \| null` | Долгота в decimal degrees. |
+| `longitude` | `number` | Долгота, **7** decimal places. |
 | `lon-hemisphere` | `"E" \| "W" \| null` | Полушарие долготы. |
-| `speed` | `number \| null` | Скорость (км/ч). |
-| `direction` | `number \| null` | Курс (градусы). |
+| `speed` | `number` | Скорость **км/ч**, **1** decimal place. |
+| `direction` | `number` | Курс (°), **1** decimal place. |
 | `mode` | `"E" \| "D" \| "A" \| "N" \| null` | Режим. |
-| `satellites-count` | `integer \| null` | Число спутников. |
+| `satellites-count` | `integer` | Число спутников. |
 | `source` | `"nmea" \| "ecef" \| "fusion" \| null` | Источник последнего измерения, повлиявшего на точку. |
 | `nav-quality` | `"GOOD" \| "KF_ECEF" \| "COAST" \| "DEGRADED" \| "LOST" \| null` | Режим fusion-слоя (см. `plan/KALMAN-ECEF-PLAN.md`). `null` — legacy-запись до fusion. |
 

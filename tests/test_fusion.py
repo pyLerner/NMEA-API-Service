@@ -21,7 +21,6 @@ def _tram_profile() -> VehicleProfile:
         innov_gate_sigma=3.0,
         innov_gate_min_m=2.0,
         rmc_invalid_inflate=8.0,
-        serial_restart_after_sec=90,
     )
 
 
@@ -88,7 +87,6 @@ def test_fusion_bus_allows_higher_speed() -> None:
         innov_gate_sigma=3.0,
         innov_gate_min_m=5.0,
         rmc_invalid_inflate=8.0,
-        serial_restart_after_sec=120,
     )
     fusion = NavFusion(bus)
     fusion.ingest_rmc(_rmc_rec(55.75, 37.62))

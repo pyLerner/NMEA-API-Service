@@ -59,7 +59,8 @@ async def main_async(args: argparse.Namespace) -> None:
     logger.info("=== GNRMC Unified App starting ===")
     logger.info(
         "Config: %s | DB=%s | MaxRows=%d | Host=%s:%d | Workers=%d | "
-        "CacheLen=%d | FlushBatch=%d | ResidualCache=%d | LogRowNMEA=%s",
+        "CacheLen=%d | FlushBatch=%d | ResidualCache=%d | LogRowNMEA=%s | "
+        "Profile=%s | OutputHz=%d",
         config_path,
         cfg.database.db_path,
         cfg.database.max_rows,

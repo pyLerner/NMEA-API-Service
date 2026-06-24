@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import aiosqlite
+from api.record_format import format_record_for_api
 from db.cache import RecordsCache
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
@@ -103,7 +104,7 @@ def create_app(cfg: AppConfig, cache: RecordsCache, logger: logging.Logger) -> F
                 (need, len(out)),
             )
             rows = await cur.fetchall()
-            db_records = [dict(r) for r in rows]
+            db_records = [format_record_for_api(dict(r)) for r in rows]
 
         data = out + db_records
         return {"result": True, "count": len(data), "data": data}

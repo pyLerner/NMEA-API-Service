@@ -122,7 +122,6 @@ _VEHICLE_PROFILE_KEYS = {
     "InnovGateSigma": "innov_gate_sigma",
     "InnovGateMinM": "innov_gate_min_m",
     "RmcInvalidInflate": "rmc_invalid_inflate",
-    "SerialRestartAfterSec": "serial_restart_after_sec",
 }
 
 
@@ -138,7 +137,6 @@ class VehicleProfile:
     innov_gate_sigma: float
     innov_gate_min_m: float
     rmc_invalid_inflate: float
-    serial_restart_after_sec: float
 
 
 @dataclass(frozen=True)
@@ -266,12 +264,7 @@ def _load_navigation_config(raw: dict, config_dir: Path) -> NavigationConfig:
     serial_restart_on = parse_yes_no(
         nav.get("SerialRestartOnRmcLoss", "yes"), "SerialRestartOnRmcLoss"
     )
-    restart_override = nav.get("SerialRestartAfterSec")
-    serial_restart_after = (
-        float(restart_override)
-        if restart_override is not None
-        else profile.serial_restart_after_sec
-    )
+    serial_restart_after = float(nav.get("SerialRestartAfterSec", 90))
     if serial_restart_after < profile.t_lost_sec:
         raise ValueError(
             "SerialRestartAfterSec must be >= TLostSec "
