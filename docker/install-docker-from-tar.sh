@@ -118,7 +118,7 @@ resolve_compose_rel_path() {
 start_stack() {
   local project_root="$1"
   log "Запуск stack в ${project_root} …"
-  ( cd "$project_root" && docker compose -f "$COMPOSE_REL_PATH" up -d --no-build )
+  ( cd "$project_root" && docker compose -f "$COMPOSE_REL_PATH" up -d --no-build --pull never )
 }
 
 main() {

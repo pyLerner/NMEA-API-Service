@@ -1,6 +1,7 @@
 services:
   navigator:
-    image: navigator:2-rawlog
+    image: navigator:2-kalman-ecef
+    pull_policy: never
     container_name: navigator
     restart: unless-stopped
     network_mode: host

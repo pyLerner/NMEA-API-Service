@@ -3,11 +3,6 @@
 set -euo pipefail
 
 NAVAPI_CONFIG="/etc/navigator/navapiserv-config.toml"
-# TOML в /etc/navigator/, которые не являются конфигами NDTP_Client
-NAVAPI_ONLY_TOML=(
-    "navapiserv-config.toml"
-    "VehicleProfiles.toml"
-)
 
 log() {
     printf '%s [INFO] %s\n' "$(date -Iseconds)" "$*"
@@ -49,18 +44,10 @@ shopt -u nullglob
 
 ndtp_configs=()
 for conf in "${configs[@]}"; do
-    base="$(basename "$conf")"
-    skip=0
-    for navapi_toml in "${NAVAPI_ONLY_TOML[@]}"; do
-        if [[ "$base" == "$navapi_toml" ]]; then
-            skip=1
-            break
-        fi
-    done
-    if ((skip)); then
-        continue
+    # NDTP_Client: только TOML с секцией [NDTP] (не navapiserv / VehicleProfiles и т.п.)
+    if grep -qE '^\[NDTP\]' "$conf" 2>/dev/null; then
+        ndtp_configs+=("$conf")
     fi
-    ndtp_configs+=("$conf")
 done
 
 if ((${#ndtp_configs[@]} == 0)); then

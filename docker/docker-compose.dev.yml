@@ -3,7 +3,7 @@
 
 services:
   navterminal:
-    image: navigator:2-rawlog
+    image: navigator:2-kalman-ecef
     build:
       context: .
       dockerfile: docker/Dockerfile
