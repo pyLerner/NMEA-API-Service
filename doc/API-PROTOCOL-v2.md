@@ -45,14 +45,24 @@
 | `lat-hemisphere` | `"N" \| "S" \| null` | Полушарие широты. |
 | `longitude` | `number` | Долгота, **7** decimal places. |
 | `lon-hemisphere` | `"E" \| "W" \| null` | Полушарие долготы. |
-| `speed` | `number` | Скорость **км/ч**, **1** decimal place. |
-| `direction` | `number` | Курс (°), **1** decimal place. |
+| `speed` | `number` | Скорость **км/ч**, **1** decimal place. При `nav-quality=GOOD` и `source=nmea` — из поля knots GNRMC; при `KF_ECEF` — из ECEFPOSVEL; не синтетическая производная 10 Гц predict (см. `PublishMode`). |
+| `direction` | `number` | Курс (°), **1** decimal place. Источник — как у `speed`. |
 | `mode` | `"E" \| "D" \| "A" \| "N" \| null` | Режим. |
 | `satellites-count` | `integer` | Число спутников. |
 | `source` | `"nmea" \| "ecef" \| "fusion" \| null` | Источник последнего измерения, повлиявшего на точку. |
-| `nav-quality` | `"GOOD" \| "KF_ECEF" \| "COAST" \| "DEGRADED" \| "LOST" \| null` | Режим fusion-слоя (см. `plan/KALMAN-ECEF-PLAN.md`). `null` — legacy-запись до fusion. |
+| `nav-quality` | `"GOOD" \| "KF_ECEF" \| "COAST" \| "DEGRADED" \| "LOST" \| null` | Режим fusion-слоя (см. `plan/KALMAN-ECEF-FUSION-v2.md`). `null` — legacy-запись до fusion. |
 
 При `nav-quality` = `LOST` новые точки в кэш не публикуются; `last-coords` возвращает последнюю доступную запись до потери сигнала.
+
+### Fusion: конфигурация (`[Navigation]`)
+
+| Ключ | Значения | По умолчанию | Описание |
+|------|----------|--------------|----------|
+| `PublishMode` | `measurement` \| `timer` \| `hybrid` | `measurement` | `measurement` — кэш только при accept RMC/ECEF; `timer` — predict+publish на `OutputRateHz`; `hybrid` — measurement при `GOOD`, timer в паузах RMC |
+| `OutputRateHz` | 1–20 | `10` | Частота внутреннего predict Kalman; частота публикации при `timer`/`hybrid` |
+| `Profile` | `tram` \| `bus` \| `custom` | `tram` | Секция `VehicleProfiles.toml` |
+
+`[API].Workers` должен быть **1**: HTTP и fusion делят один in-memory кэш в процессе.
 
 ## 4. Эндпоинты
 
@@ -85,6 +95,8 @@ curl -s "http://127.0.0.1:7000/api/ping"
 ### 4.2 GET /api/navigator/v1/last-coords
 
 Возвращает последнюю запись из in-memory кэша (логика совпадает с legacy `GET /LastCoords`).
+
+Эндпоинт отдаёт **последнюю запись кэша** без пересчёта на лету. При **`PublishMode=measurement`** и **`nav-quality=GOOD`** ожидается точка последнего accept **RMC/ECEF** (координаты из GPS-измерения, не экстраполяция Kalman). При **`timer`** или **`hybrid`** последняя запись может быть predict-точкой; ориентир для клиента — поля `nav-quality`, `source`, `time` (см. [plan/KALMAN-ECEF-FUSION-v2.md](../plan/KALMAN-ECEF-FUSION-v2.md) §3).
 
 #### Запрос
 

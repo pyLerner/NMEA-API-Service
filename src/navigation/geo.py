@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 # =============================================================================
-# Geodesy helpers for local ENU fusion
+# Геодезические функции для локальной ENU fusion (UTF-8)
 # =============================================================================
+"""Haversine, ENU offset, преобразование полушарий для NavFusion."""
 from __future__ import annotations
 
 import math

@@ -29,6 +29,11 @@
 # InnovGateMinM — минимальный порог innovation по позиции (м), независимо от σ.
 #
 # RmcInvalidInflate — во сколько раз увеличить R при is_valid=V в GNRMC.
+#
+# RmcSpeedZeroKmh — порог скорости из RMC (км/ч): ниже + малый Δpos → v := 0.
+#
+# RmcTrustModes — режимы GNRMC (mode), при которых позиция считается доверенной;
+#   при kinematic conflict выполняется hard reset к RMC, а не reject.
 # =============================================================================
 
 [tram]
@@ -42,6 +47,8 @@ StandstillSec = 3
 InnovGateSigma = 3.0
 InnovGateMinM = 2.0
 RmcInvalidInflate = 8.0
+RmcSpeedZeroKmh = 0.5
+RmcTrustModes = ["A", "D"]
 
 [bus]
 VMaxKmh = 80
@@ -54,6 +61,8 @@ StandstillSec = 3
 InnovGateSigma = 3.0
 InnovGateMinM = 5.0
 RmcInvalidInflate = 8.0
+RmcSpeedZeroKmh = 0.5
+RmcTrustModes = ["A", "D"]
 
 [custom]
 VMaxKmh = 40
@@ -66,3 +75,5 @@ StandstillSec = 3
 InnovGateSigma = 3.0
 InnovGateMinM = 3.0
 RmcInvalidInflate = 8.0
+RmcSpeedZeroKmh = 0.5
+RmcTrustModes = ["A", "D"]

@@ -1,6 +1,14 @@
+# -*- coding: utf-8 -*-
 # =============================================================================
-# Background tasks: NMEA reader, fusion output timer, DB flusher
+# Фоновые задачи: NMEA reader, fusion tick, DB flusher (UTF-8)
 # =============================================================================
+"""
+Асинхронные задачи ingestion и публикации координат.
+
+- nmea_reader_task — чтение NMEA, вызов NavFusion.ingest_*;
+- fusion_tick_task — внутренний predict и публикация по PublishMode;
+- db_flusher_task — сброс кэша в SQLite и retention.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -51,24 +59,38 @@ async def _cache_fusion_output(cache: RecordsCache, out: FusionOutput) -> None:
     await cache.add(fusion_output_to_record(out))
 
 
-async def fusion_output_task(
+async def fusion_tick_task(
     cfg: AppConfig,
     fusion: NavFusion,
     cache: RecordsCache,
     logger: logging.Logger,
 ) -> None:
-    """Publish fused coordinates at OutputRateHz."""
+    """
+    Периодический predict Kalman на частоте OutputRateHz.
+
+    При PublishMode timer/hybrid и should_publish_timer() — запись в кэш.
+    """
     interval = 1.0 / cfg.navigation.output_rate_hz
-    logger.info("Fusion output timer: %.1f Hz", cfg.navigation.output_rate_hz)
+    logger.info(
+        "Fusion tick: %.1f Hz predict, publish_mode=%s",
+        cfg.navigation.output_rate_hz,
+        cfg.navigation.publish_mode.value,
+    )
     try:
         while True:
             await asyncio.sleep(interval)
-            out = fusion.predict_publish(interval)
-            if out is not None:
-                await _cache_fusion_output(cache, out)
+            fusion.predict_internal_only(interval)
+            if fusion.should_publish_timer():
+                out = fusion.build_publish_output()
+                if out is not None:
+                    await _cache_fusion_output(cache, out)
     except asyncio.CancelledError:
-        logger.info("Fusion output task cancelled")
+        logger.info("Fusion tick task cancelled")
         raise
+
+
+# Backward-compatible alias
+fusion_output_task = fusion_tick_task
 
 
 async def nmea_reader_task(
@@ -79,7 +101,9 @@ async def nmea_reader_task(
     fusion: NavFusion,
 ) -> None:
     """
-    Read NMEA lines, log raw rows, feed NavFusion with RMC/ECEF/GGA.
+    Читать NMEA (serial / файл / stdin), логировать сырьё, кормить NavFusion.
+
+    При ненулевом FusionOutput от ingest — запись в RecordsCache.
     """
     latest_satellites: Optional[int] = None
     serial_restart_done = False

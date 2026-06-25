@@ -1,6 +1,16 @@
+# -*- coding: utf-8 -*-
 # =============================================================================
-# NMEA parsing utilities
+# Разбор NMEA-предложений GNRMC, GGA, ECEFPOSVEL (UTF-8)
 # =============================================================================
+"""
+Утилиты парсинга NMEA для NavFusion.
+
+Поддерживаемые типы:
+- ``$GNRMC`` / ``$GPRMC`` — основной источник позиции и скорости;
+- ``$GPGGA`` / ``$GNGGA`` — число спутников (подсказка для RMC);
+- ``$ECEFPOSVEL`` — резервный ECEF-источник при паузах RMC.
+"""
+from __future__ import annotations
 
 import math
 import re
@@ -22,13 +32,13 @@ ECEF_RADIUS_MAX_M = 6_440_000.0
 
 def nmea_checksum_is_valid(sentence: str) -> bool:
     """
-    Validate NMEA checksum.
+    Проверить контрольную сумму NMEA-предложения.
 
     Args:
-        sentence: Full NMEA sentence with leading '$' and trailing '*XX'.
+        sentence: Полная строка с ведущим ``$`` и завершающим ``*XX``.
 
     Returns:
-        True if checksum matches, False otherwise.
+        ``True``, если XOR-сумма тела совпадает с шестнадцатеричным суффиксом.
     """
     s = sentence.strip()
     m = CHECKSUM_RE.match(s)
@@ -46,10 +56,13 @@ def nmea_checksum_is_valid(sentence: str) -> bool:
 
 def ddmm_to_decimal(ddmm_str: str) -> Optional[float]:
     """
-    Convert NMEA ddmm.mmmm to decimal degrees.
+    Преобразовать NMEA-координату ``ddmm.mmmm`` в десятичные градусы.
+
+    Args:
+        ddmm_str: Строка широты/долготы в формате NMEA.
 
     Returns:
-        Decimal degrees or None on failure/empty.
+        Десятичные градусы (7 знаков) или ``None`` при пустой/некорректной строке.
     """
     if not ddmm_str:
         return None
@@ -63,7 +76,15 @@ def ddmm_to_decimal(ddmm_str: str) -> Optional[float]:
 
 
 def _parse_nmea_time(time_str: str) -> Optional[datetime]:
-    """Parse HHMMSS.sss using the current UTC calendar date."""
+    """
+    Разобрать поле времени ``HHMMSS.sss`` с датой текущего UTC-дня.
+
+    Args:
+        time_str: Временная метка из NMEA без даты.
+
+    Returns:
+        ``datetime`` в UTC или ``None``.
+    """
     if not time_str or len(time_str) < 6:
         return None
     try:
@@ -90,7 +111,15 @@ def _parse_nmea_time(time_str: str) -> Optional[datetime]:
 
 
 def _ecef_to_geodetic(x: float, y: float, z: float) -> tuple[float, float]:
-    """Convert ECEF coordinates (meters) to geodetic lat/lon (decimal degrees)."""
+    """
+    Преобразовать ECEF (м) в геодезические широту и долготу (градусы).
+
+    Args:
+        x, y, z: Координаты в системе ECEF, метры.
+
+    Returns:
+        Пара ``(широта, долгота)`` в десятичных градусах.
+    """
     lon = math.atan2(y, x)
     p = math.hypot(x, y)
     if p < 1e-6:
@@ -107,7 +136,16 @@ def _ecef_to_geodetic(x: float, y: float, z: float) -> tuple[float, float]:
 def _ecef_velocity_to_course(
     x: float, y: float, z: float, vx: float, vy: float, vz: float
 ) -> float:
-    """Convert ECEF velocity (m/s) to course over ground in degrees [0, 360)."""
+    """
+    Вычислить курс по земле из скорости в ECEF (м/с).
+
+    Args:
+        x, y, z: Позиция ECEF, м.
+        vx, vy, vz: Скорость ECEF, м/с.
+
+    Returns:
+        Курс в градусах ``[0, 360)``; ``0`` при нулевой горизонтальной скорости.
+    """
     lat_rad = math.radians(_ecef_to_geodetic(x, y, z)[0])
     lon_rad = math.atan2(y, x)
 
@@ -129,6 +167,15 @@ def _ecef_velocity_to_course(
 
 
 def _split_nmea_payload(sentence: str) -> Optional[list[str]]:
+    """
+    Разбить NMEA-строку на поля CSV после проверки checksum.
+
+    Args:
+        sentence: Сырое NMEA-предложение.
+
+    Returns:
+        Список полей или ``None`` при пустой строке / неверной контрольной сумме.
+    """
     s = sentence.strip()
     if not s:
         return None
@@ -140,6 +187,15 @@ def _split_nmea_payload(sentence: str) -> Optional[list[str]]:
 
 
 def _ecef_position_valid(x: float, y: float, z: float) -> bool:
+    """
+    Проверить правдоподобность ECEF-позиции по радиусу от центра Земли.
+
+    Args:
+        x, y, z: Координаты ECEF, м.
+
+    Returns:
+        ``True``, если радиус в допустимом диапазоне WGS84.
+    """
     if abs(x) < 1.0 and abs(y) < 1.0:
         return False
     radius = math.sqrt(x * x + y * y + z * z)
@@ -148,24 +204,17 @@ def _ecef_position_valid(x: float, y: float, z: float) -> bool:
 
 def parse_gga_satellites(sentence: str) -> Optional[int]:
     """
-    Parse satellites count from $GPGGA/$GNGGA sentence.
+    Извлечь число спутников из ``$GPGGA`` / ``$GNGGA``.
 
-    GGA fields reference:
-      0: $GPGGA
-      1: UTC time
-      2: Latitude
-      3: N/S
-      4: Longitude
-      5: E/W
-      6: Fix quality
-      7: Number of satellites (integer)
-      ...
+    Поля GGA (фрагмент):
+      0 — заголовок ``$GPGGA``;
+      7 — число спутников (целое).
 
     Args:
-        sentence: NMEA GGA sentence.
+        sentence: NMEA-предложение GGA.
 
     Returns:
-        Satellites count (int) or None if not available or invalid.
+        Число спутников или ``None``, если поле отсутствует или некорректно.
     """
     parts = _split_nmea_payload(sentence)
     if not parts or not parts[0].endswith("GGA"):
@@ -182,27 +231,25 @@ def parse_rmc(
     sentence: str, satellites_hint: Optional[int]
 ) -> Optional[dict[str, Any]]:
     """
-    Parse $GNRMC/$GPRMC sentence and return a dict of fields, augmented with satellites_count.
+    Разобрать ``$GNRMC`` / ``$GPRMC`` в словарь полей для fusion/API.
 
-    Fields produced:
-    - datetime (ISO8601 UTC)
-    - is_valid ('A' or 'V')
-    - latitude (decimal degrees, signed by hemisphere)
-    - latitude_hemi ('N'|'S' or None)
-    - longitude (decimal degrees, signed by hemisphere)
-    - longitude_hemi ('E'|'W' or None)
-    - speed (km/h)
-    - direction (degrees -> float or None)
-    - mode ('E'|'D'|'A'|'N' or None)
-    - satellites_count (int or None)
-    - source ('nmea')
+    Ключи результата:
+    - ``datetime`` — ISO8601 UTC;
+    - ``is_valid`` — ``A`` (валидно) или ``V``;
+    - ``latitude``, ``longitude`` — десятичные градусы со знаком по полушарию;
+    - ``latitude_hemi``, ``longitude_hemi`` — ``N``/``S``, ``E``/``W``;
+    - ``speed`` — км/ч;
+    - ``direction`` — курс, градусы;
+    - ``mode`` — режим фиксации ``E``/``D``/``A``/``N`` или ``None``;
+    - ``satellites_count`` — из ``satellites_hint`` (GGA) или ``0``;
+    - ``source`` — ``nmea``.
 
     Args:
-        sentence: NMEA RMC sentence.
-        satellites_hint: latest satellites count observed from GGA; may be None.
+        sentence: NMEA-предложение RMC.
+        satellites_hint: Последнее известное число спутников из GGA; может быть ``None``.
 
     Returns:
-        Parsed record dict or None on failure.
+        Словарь полей или ``None`` при ошибке разбора.
     """
     parts = _split_nmea_payload(sentence)
     if not parts or not parts[0].endswith("RMC"):
@@ -276,12 +323,18 @@ def parse_rmc(
 
 def parse_ecefposvel(sentence: str) -> Optional[dict[str, Any]]:
     """
-    Parse $ECEFPOSVEL sentence into gnrmc-compatible fields.
+    Разобрать ``$ECEFPOSVEL`` в словарь, совместимый с полями RMC.
 
-    Sentence format:
-    $ECEFPOSVEL,time,X,Y,Z,Vx,Vy,Vz*CS
+    Формат предложения::
+        $ECEFPOSVEL,time,X,Y,Z,Vx,Vy,Vz*CS
 
-    Speed is stored in km/h (converted from m/s).
+    Скорость сохраняется в км/ч (конвертация из м/с).
+
+    Args:
+        sentence: NMEA-предложение ECEFPOSVEL.
+
+    Returns:
+        Словарь полей (``source`` = ``ecef``) или ``None`` при ошибке.
     """
     parts = _split_nmea_payload(sentence)
     if not parts or parts[0] != "ECEFPOSVEL":

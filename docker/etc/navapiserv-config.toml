@@ -1,3 +1,17 @@
+# =============================================================================
+# navapiserv-config.toml — конфиг NavAPI в Docker (UTF-8)
+# =============================================================================
+# Монтируется как /etc/navigator/navapiserv-config.toml
+# Спецификация fusion v2: plan/KALMAN-ECEF-FUSION-v2.md
+#
+# Секции и ключи — см. комментарии в etc/gnrmc-provider.toml (тот же формат).
+# Отличия deploy-образа:
+#   DB = /db/gnrmc.db — том Docker
+#   HTTP_Port = 7100 — порт контейнера
+#   LogDir = /log/navapiserv
+#   HardwarePort / Baud — по умолчанию ttyS0 @ 19200
+# =============================================================================
+
 [Database]
 DB = "/db/gnrmc.db"
 MaxRows = 150000
@@ -11,7 +25,7 @@ Baud = 19200
 [API]
 Host = "0.0.0.0"
 HTTP_Port = 7100
-Workers = 5
+Workers = 1
 Token = "A0473A67-27A1-3C05-A2D1-5C134639347F"
 
 [System]
@@ -36,6 +50,7 @@ ResidualCache = 10
 [Navigation]
 Profile = "tram"
 VehicleProfilesPath = "VehicleProfiles.toml"
+PublishMode = "measurement"
 OutputRateHz = 10
 SerialRestartOnRmcLoss = "yes"
 SerialRestartAfterSec = 90

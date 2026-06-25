@@ -23,13 +23,15 @@
 - Гибкий источник входных данных: serial / file / stdin.
 - Ограниченный in-memory кэш с частичным flush в БД и остаточным хвостом (`ResidualCache`).
 - Retention-аудит таблицы SQLite по лимиту строк.
+- **NavFusion v2** (Kalman + GNRMC/ECEFPOSVEL): см. [plan/KALMAN-ECEF-FUSION-v2.md](plan/KALMAN-ECEF-FUSION-v2.md).
 
 ## Архитектура
 
 ```mermaid
 flowchart LR
     nmeaInput[NMEA_Input] --> parser[NMEA_Parser]
-    parser --> cache[RecordsCache]
+    parser --> fusion[NavFusion_v2]
+    fusion --> cache[RecordsCache]
     cache --> api[FastAPI]
     cache --> flusher[DB_Flusher]
     flusher --> sqlite[(SQLite_gnrmc)]
@@ -38,7 +40,9 @@ flowchart LR
 
 Ключевые модули:
 - `src/main.py` — точка входа и оркестрация задач.
-- `src/runner_task.py` — ingestion (`nmea_reader_task`) и flush (`db_flusher_task`).
+- `src/runner_task.py` — NMEA reader, fusion tick, DB flusher.
+- `src/navigation/fusion.py` — NavFusion v2 (гейты, standstill, PublishMode).
+- `src/navigation/enums.py` — `PublishMode`, `NavQuality`, `NavSource`.
 - `src/nmea/parsing.py` — проверка checksum и парсинг RMC/GGA.
 - `src/db/cache.py` — модель записи и логика in-memory кэша.
 - `src/db/sql.py` — инициализация SQLite, batch insert, retention.
@@ -90,7 +94,7 @@ uv sync --group dev
 - `[API]`
   - `Host` — адрес биндинга API;
   - `HTTP_Port` — TCP порт API;
-  - `Workers` — число воркеров uvicorn (из конфига приложения);
+  - `Workers` — число воркеров uvicorn; **должно быть `1`** (in-memory кэш обновляется в процессе reader/fusion, не в HTTP-воркерах);
   - `Token` — Bearer-токен авторизации.
 - `[System]`
   - `ProgramDirectory` — служебный каталог приложения;
@@ -108,6 +112,15 @@ uv sync --group dev
   - `CacheRecordsLength` — максимальный размер in-memory кэша;
   - `CacheRecords` — размер окна flush-цикла (порция в БД + `ResidualCache` в памяти);
   - `ResidualCache` — число новейших записей, остающихся в кэше после flush (триггер flush: `CacheRecords - ResidualCache` новых записей).
+- `[Navigation]` — fusion GNRMC + ECEFPOSVEL (см. `plan/KALMAN-ECEF-FUSION-v2.md`)
+  - `Profile` — `tram` | `bus` | `custom` (секция `VehicleProfiles.toml`);
+  - `VehicleProfilesPath` — путь к файлу профилей;
+  - `PublishMode` — `measurement` (default) | `timer` | `hybrid` — когда писать точки в кэш/API;
+  - `OutputRateHz` — частота внутреннего predict (1–20); публикация при `timer`/`hybrid`;
+  - `SerialRestartOnRmcLoss` — `yes`/`no`: переоткрыть serial при долгой паузе GNRMC;
+  - `SerialRestartAfterSec` — порог паузы GNRMC для рестарта serial (≥ `TLostSec` профиля).
+
+`VehicleProfiles.toml`: лимиты гейтов (`VMaxKmh`, `AMax`, …), `RmcSpeedZeroKmh`, `RmcTrustModes` — см. комментарии в файле.
 
 Приоритет источника входных данных:
 1. `System.Input` (файл), если задан;

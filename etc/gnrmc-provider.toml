@@ -1,3 +1,56 @@
+# =============================================================================
+# gnrmc-provider.toml — главный конфиг NMEA-API-Service (UTF-8)
+# =============================================================================
+# Запуск: python -m main --config etc/gnrmc-provider.toml
+# Спецификация fusion v2: plan/KALMAN-ECEF-FUSION-v2.md
+#
+# [Database]
+#   DB — путь к файлу SQLite с историей координат.
+#   MaxRows — максимум строк в таблице gnrmc; старые удаляются retention-аудитом.
+#
+# [Hardware]
+#   HardwarePort — устройство serial (GNRMC/ECEFPOSVEL).
+#   Baud — скорость порта (бит/с).
+#
+# [API]
+#   Host — адрес привязки HTTP-сервера (0.0.0.0 — все интерфейсы).
+#   HTTP_Port — TCP-порт API.
+#   Workers — число воркеров uvicorn; ОБЯЗАТЕЛЬНО 1: кэш обновляется в процессе
+#     reader/fusion, а не в HTTP-воркерах.
+#   Token — Bearer-токен для legacy-эндпоинтов (/LastCoords и т.д.).
+#
+# [System]
+#   ProgramDirectory — служебный каталог приложения.
+#   Input — путь к файлу NMEA; если непустой — чтение из файла вместо serial.
+#   Stdin — true: читать NMEA из stdin (если Input пуст).
+#
+# [Log]
+#   LogDir — каталог основного лога.
+#   LogName — имя файла основного лога.
+#   LogLevel — уровень (INFO, DEBUG, WARNING, …).
+#   MaxLogs — число ротируемых архивов.
+#   MaxSize — размер файла до ротации (5m, 512k или байты).
+#   LogRowNMEA — yes/no: дублировать сырые NMEA-строки в отдельный файл.
+#   RowNMEA — имя файла сырого NMEA-лога.
+#
+# [Memory]
+#   CacheRecordsLength — максимальный размер in-memory deque.
+#   CacheRecords — окно flush: после стольких новых записей сбрасывается пачка в БД.
+#   ResidualCache — число новейших записей, остающихся в RAM после flush.
+#
+# [Navigation] — NavFusion v2 (см. plan/KALMAN-ECEF-FUSION-v2.md)
+#   Profile — секция VehicleProfiles.toml: tram | bus | custom.
+#   VehicleProfilesPath — путь к файлу лимитов fusion (гейты, стоянка).
+#   PublishMode — политика записи в кэш/API:
+#     measurement — только accept RMC/ECEF (рекомендуется для RMC-only);
+#     timer — predict + publish каждые 1/OutputRateHz с;
+#     hybrid — measurement при GOOD; timer в паузах RMC.
+#   OutputRateHz — частота внутреннего predict Kalman (1–20); при timer/hybrid
+#     также частота публикации в кэш.
+#   SerialRestartOnRmcLoss — yes/no: переоткрыть serial при долгой паузе GNRMC.
+#   SerialRestartAfterSec — порог паузы GNRMC для рестарта (≥ TLostSec профиля).
+# =============================================================================
+
 [Database]
 DB = "data/gnrmc.db"
 MaxRows = 150000
@@ -11,12 +64,12 @@ Baud = 9600
 [API]
 Host = "0.0.0.0"
 HTTP_Port = 7000
-Workers = 5
+Workers = 1
 Token = "A0473A67-27A1-3C05-A2D1-5C134639347F"
 
 [System]
 ProgramDirectory = "/usr/local/gnrmc"
-Input = ""    # leave empty to read serial; or set to a test file
+Input = ""
 Stdin = false
 
 [Log]
@@ -29,15 +82,14 @@ LogRowNMEA = "no"
 RowNMEA = "nmea-row.log"
 
 [Memory]
-# Max number of records kept in the in-memory cache
 CacheRecordsLength = 5000
-# Flush window: (CacheRecords - ResidualCache) records go to DB, ResidualCache stay in cache
 CacheRecords = 100
 ResidualCache = 10
 
 [Navigation]
 Profile = "tram"
 VehicleProfilesPath = "VehicleProfiles.toml"
+PublishMode = "measurement"
 OutputRateHz = 10
 SerialRestartOnRmcLoss = "yes"
 SerialRestartAfterSec = 90

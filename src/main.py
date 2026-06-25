@@ -1,13 +1,9 @@
+# -*- coding: utf-8 -*-
 """
-Единое асинхронное приложение GNRMC.
+Единое асинхронное приложение GNRMC / NavFusion v2 (UTF-8).
 
-Запускает:
-- чтение NMEA (RS-232/RS-485 / файл / stdin), парсинг RMC/ECEFPOSVEL и GGA;
-- in-memory кэш с частичным flush в SQLite;
-- HTTP API (FastAPI) для выдачи координат;
-- retention-аудит таблицы SQLite.
-
-Конфигурация: TOML (--config), секции [Log], [Memory], [Database], …
+Оркестрация: NMEA reader, fusion tick, DB flusher, HTTP API в одном процессе.
+Конфигурация: TOML (--config), см. plan/KALMAN-ECEF-FUSION-v2.md.
 """
 
 from __future__ import annotations
@@ -34,7 +30,7 @@ from log_config.log_config import setup_logger
 from models.data_models import load_config
 
 # Task Runner
-from runner_task import db_flusher_task, fusion_output_task, nmea_reader_task
+from runner_task import db_flusher_task, fusion_tick_task, nmea_reader_task
 from navigation.fusion import NavFusion
 
 # =============================================================================
@@ -60,7 +56,7 @@ async def main_async(args: argparse.Namespace) -> None:
     logger.info(
         "Config: %s | DB=%s | MaxRows=%d | Host=%s:%d | Workers=%d | "
         "CacheLen=%d | FlushBatch=%d | ResidualCache=%d | LogRowNMEA=%s | "
-        "Profile=%s | OutputHz=%d",
+        "Profile=%s | PublishMode=%s | OutputHz=%d | APIWorkers=%d",
         config_path,
         cfg.database.db_path,
         cfg.database.max_rows,
@@ -72,8 +68,17 @@ async def main_async(args: argparse.Namespace) -> None:
         cfg.memory.residual_cache,
         cfg.log.log_row_nmea,
         cfg.navigation.profile_name,
+        cfg.navigation.publish_mode.value,
         cfg.navigation.output_rate_hz,
+        cfg.api.workers,
     )
+
+    if cfg.api.workers > 1:
+        logger.warning(
+            "API Workers=%d: in-memory cache is not shared across uvicorn "
+            "worker processes; set [API] Workers = 1 for consistent last-coords",
+            cfg.api.workers,
+        )
 
     # DB
     db_conn = await init_db(cfg.database.db_path, logger)
@@ -105,15 +110,19 @@ async def main_async(args: argparse.Namespace) -> None:
     )
     server = uvicorn.Server(config=config)
 
-    fusion = NavFusion(cfg.navigation.profile)
+    fusion = NavFusion(
+        cfg.navigation.profile,
+        publish_mode=cfg.navigation.publish_mode,
+        logger=logger,
+    )
 
-    # Tasks: reader, fusion output, flusher, api
+    # Tasks: reader, fusion tick, flusher, api
     reader_t = asyncio.create_task(
         nmea_reader_task(cfg, cache, logger, nmea_row_logger, fusion),
         name="nmea_reader",
     )
     fusion_t = asyncio.create_task(
-        fusion_output_task(cfg, fusion, cache, logger), name="fusion_output"
+        fusion_tick_task(cfg, fusion, cache, logger), name="fusion_tick"
     )
     flusher_t = asyncio.create_task(
         db_flusher_task(cfg, cache, db_conn, logger), name="db_flusher"

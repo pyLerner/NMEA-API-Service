@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 # =============================================================================
-# API server (FastAPI)
+# API server (FastAPI), UTF-8
 # =============================================================================
+"""HTTP API для выдачи координат из RecordsCache и SQLite."""
 import logging
 from datetime import datetime, timezone
 from typing import Any

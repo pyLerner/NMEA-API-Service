@@ -1,6 +1,8 @@
 # План: онлайн-навигация GNRMC + Kalman / ECEFPOSVEL
 
-Спецификация fusion-слоя для NMEA-API-Service. Документ описывает **целевое поведение** для реализации; код в репозитории на момент написания ещё не переведён на эту схему.
+> **Superseded by [KALMAN-ECEF-FUSION-v2.md](KALMAN-ECEF-FUSION-v2.md)** для поведения fusion v2 (стоянка, PublishMode, Workers=1).
+
+Спецификация fusion-слоя для NMEA-API-Service.
 
 **Версия релиза (целевая):** `v2-kalman-ecef`  
 **Docker-образ:** `navigator:2-kalman-ecef`  

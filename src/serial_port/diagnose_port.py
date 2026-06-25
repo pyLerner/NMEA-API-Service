@@ -1,21 +1,38 @@
+# -*- coding: utf-8 -*-
+# =============================================================================
+# Диагностика одного serial-порта (UTF-8)
+# =============================================================================
+"""
+Утилита командной строки: непрерывное чтение NMEA с заданного порта.
+
+Запуск: ``python -m serial_port.diagnose_port`` (из каталога ``src``).
+"""
+from __future__ import annotations
+
 import asyncio
-from pathlib import Path
 from typing import AsyncIterator
 
-from serial.serialutil import SerialException 
+from serial.serialutil import SerialException
 
-# Optional: pyserial-asyncio for async serial
 try:
-    import serial_asyncio # type: ignore
+    import serial_asyncio  # type: ignore
 except Exception:
-    serial_asyncio = None  # graceful fallback to file/stdin
+    serial_asyncio = None
 
 
 async def iter_serial_lines(port: str, baud: int) -> AsyncIterator[str]:
     """
-    Async iterator over lines from a serial port.
+    Async-итератор строк с serial-порта (упрощённый, для диагностики).
 
-    Requires pyserial-asyncio. If unavailable, this raises RuntimeError.
+    Args:
+        port: Путь к устройству.
+        baud: Скорость порта, бит/с.
+
+    Yields:
+        Строки порта после декодирования ASCII.
+
+    Raises:
+        RuntimeError: если не установлен ``pyserial-asyncio``.
     """
     if serial_asyncio is None:
         raise RuntimeError(
@@ -33,19 +50,15 @@ async def iter_serial_lines(port: str, baud: int) -> AsyncIterator[str]:
     except SerialException as e:
         print(e)
     finally:
-        # writer is not returned by open_serial_connection; port closes with GC.
         pass
 
 
 if __name__ == "__main__":
-    
-    async def main():
-        """
-        Диагностика работы последовательного порта.
-        Чтение NMEA по строкам из порта
-        """
+
+    async def main() -> None:
+        """Читать и печатать строки ``$G*`` с ``/dev/ttyS3`` @ 9600."""
         port = "/dev/ttyS3"
-        baud=9600
+        baud = 9600
         while True:
             line_iter = iter_serial_lines(port=port, baud=baud)
             async for raw in line_iter:
@@ -54,9 +67,9 @@ if __name__ == "__main__":
                     await asyncio.sleep(0.01)
                     continue
                 print(line)
-    
+
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
         print("interrupted")
-        exit()
+        raise SystemExit(0) from None

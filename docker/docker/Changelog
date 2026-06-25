@@ -1,7 +1,14 @@
+# v2.1-kalman-fusion
+- Fusion v2: PublishMode, standstill RMC, speed из измерений, Workers=1.
+- Подробные комментарии в TOML-конфигах (UTF-8).
+- Спека: plan/KALMAN-ECEF-FUSION-v2.md; API-PROTOCOL-v2 обновлён.
+
 # v2-kalman-ecef
 - Fusion GNRMC + ECEFPOSVEL (Kalman CV, online 10 Гц).
-- `[Navigation]` + `VehicleProfiles.toml` (tram/bus/custom).
-- SQLite: колонка `quality`.
+- `[Navigation]` + `VehicleProfiles.toml` (tram/bus/custom); `SerialRestartAfterSec` только в главном TOML.
+- SQLite: колонка `quality`; API: `nav-quality` (v2).
+- API: нормализация координат (7 знаков), speed/direction (1 знак, км/ч), `record_id`/`satellites_count` как int.
+- entrypoint: NDTP только для TOML с `[NDTP]`; install: `--pull never`, автоподстановка тега образа в compose.
 - Образ `navigator:2-kalman-ecef`; bundle `NavigatorDockerApp-KF-ECEF-*.tar.gz`.
 
 # v2-rawlog

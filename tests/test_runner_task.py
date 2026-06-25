@@ -65,7 +65,10 @@ def _null_logger() -> logging.Logger:
 
 
 async def _run_reader(cfg: AppConfig, cache: RecordsCache, logger: logging.Logger) -> None:
-    fusion = NavFusion(cfg.navigation.profile)
+    fusion = NavFusion(
+        cfg.navigation.profile,
+        publish_mode=cfg.navigation.publish_mode,
+    )
     await nmea_reader_task(cfg, cache, logger, None, fusion)
 
 

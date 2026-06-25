@@ -35,6 +35,7 @@ def _default_navigation() -> NavigationConfig:
             "Navigation": {
                 "Profile": "tram",
                 "VehicleProfilesPath": "VehicleProfiles.toml",
+                "PublishMode": "measurement",
                 "OutputRateHz": 1,
                 "SerialRestartOnRmcLoss": "no",
                 "SerialRestartAfterSec": 90,

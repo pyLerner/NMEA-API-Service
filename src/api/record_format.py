@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 # =============================================================================
-# API record normalization (Go client compatibility)
+# Нормализация записи для JSON API (UTF-8)
 # =============================================================================
+"""Округление координат, speed, direction для совместимости с Go-клиентом."""
 from __future__ import annotations
 
 from typing import Any

@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 # =============================================================================
-# Модели конфигурации и загрузка TOML
+# Модели конфигурации и загрузка TOML (UTF-8)
 # =============================================================================
 
 import logging
@@ -7,6 +8,8 @@ import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
+
+from navigation.enums import PublishMode
 
 _SIZE_SUFFIX = {
     "k": 1024,
@@ -122,11 +125,23 @@ _VEHICLE_PROFILE_KEYS = {
     "InnovGateSigma": "innov_gate_sigma",
     "InnovGateMinM": "innov_gate_min_m",
     "RmcInvalidInflate": "rmc_invalid_inflate",
+    "RmcSpeedZeroKmh": "rmc_speed_zero_kmh",
+}
+
+_VEHICLE_PROFILE_OPTIONAL_DEFAULTS: dict[str, float | frozenset[str]] = {
+    "rmc_speed_zero_kmh": 0.5,
 }
 
 
 @dataclass(frozen=True)
 class VehicleProfile:
+    """
+    Лимиты NavFusion из VehicleProfiles.toml (секция tram/bus/custom).
+
+    rmc_speed_zero_kmh — порог «стоянка» по полю speed RMC (км/ч).
+    rmc_trust_modes — mode GNRMC для hard reset (обычно A, D).
+    """
+
     v_max_kmh: float
     a_max: float
     t_hold_sec: float
@@ -137,13 +152,23 @@ class VehicleProfile:
     innov_gate_sigma: float
     innov_gate_min_m: float
     rmc_invalid_inflate: float
+    rmc_speed_zero_kmh: float
+    rmc_trust_modes: frozenset[str]
 
 
 @dataclass(frozen=True)
 class NavigationConfig:
+    """
+    Секция [Navigation] главного TOML.
+
+    publish_mode — см. PublishMode в navigation.enums.
+    output_rate_hz — частота predict; при timer/hybrid также публикации.
+    """
+
     profile_name: str
     vehicle_profiles_path: Path
     profile: VehicleProfile
+    publish_mode: PublishMode
     output_rate_hz: int
     serial_restart_on_rmc_loss: bool
     serial_restart_after_sec: float
@@ -209,9 +234,12 @@ def _load_vehicle_profile(path: Path, section: str) -> VehicleProfile:
             f"Profile section [{section}] not found in {path}"
         )
     sec = raw[section]
-    kwargs: dict[str, float | int] = {}
+    kwargs: dict[str, float | int | frozenset[str]] = {}
     for toml_key, field in _VEHICLE_PROFILE_KEYS.items():
         if toml_key not in sec:
+            if field in _VEHICLE_PROFILE_OPTIONAL_DEFAULTS:
+                kwargs[field] = _VEHICLE_PROFILE_OPTIONAL_DEFAULTS[field]
+                continue
             raise ValueError(
                 f"Missing {toml_key} in [{section}] of {path}"
             )
@@ -220,6 +248,14 @@ def _load_vehicle_profile(path: Path, section: str) -> VehicleProfile:
             kwargs[field] = int(val)
         else:
             kwargs[field] = float(val)
+
+    trust_raw = sec.get("RmcTrustModes", ["A", "D"])
+    if isinstance(trust_raw, str):
+        modes = frozenset(m.strip() for m in trust_raw.split(",") if m.strip())
+    else:
+        modes = frozenset(str(m).strip() for m in trust_raw)
+    kwargs["rmc_trust_modes"] = modes
+
     return VehicleProfile(**kwargs)  # type: ignore[arg-type]
 
 
@@ -257,6 +293,15 @@ def _load_navigation_config(raw: dict, config_dir: Path) -> NavigationConfig:
     profile = _load_vehicle_profile(profiles_path, profile_name)
     _validate_vehicle_profile(profile)
 
+    publish_mode_raw = str(nav.get("PublishMode", "measurement")).strip().lower()
+    try:
+        publish_mode = PublishMode(publish_mode_raw)
+    except ValueError as exc:
+        valid = ", ".join(m.value for m in PublishMode)
+        raise ValueError(
+            f"Navigation.PublishMode must be one of: {valid}, got {publish_mode_raw!r}"
+        ) from exc
+
     output_rate_hz = int(nav.get("OutputRateHz", 10))
     if not 1 <= output_rate_hz <= 20:
         raise ValueError("OutputRateHz must be in [1, 20]")
@@ -275,6 +320,7 @@ def _load_navigation_config(raw: dict, config_dir: Path) -> NavigationConfig:
         profile_name=profile_name,
         vehicle_profiles_path=profiles_path,
         profile=profile,
+        publish_mode=publish_mode,
         output_rate_hz=output_rate_hz,
         serial_restart_on_rmc_loss=serial_restart_on,
         serial_restart_after_sec=serial_restart_after,
@@ -338,7 +384,7 @@ def load_config(path: Path) -> AppConfig:
         api=ApiConfig(
             host=api.get("Host", "0.0.0.0"),
             port=int(api.get("HTTP_Port", 7000)),
-            workers=int(api.get("Workers", 2)),
+            workers=int(api.get("Workers", 1)),
             token=str(api.get("Token", "123")),
         ),
         system=SystemConfig(
