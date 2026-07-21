@@ -1,0 +1,27 @@
+[API]
+Host = "127.0.0.1"
+Port = 7100
+Token = "A0473A67-27A1-3C05-A2D1-5C134639347F"
+
+[NDTP]
+Host = "31.172.134.100"
+Port = 5401
+
+[System]
+LogDir = "/log/ndtp-client.log"
+Timeout = 10
+PeerAddr = 706720001
+Regular = true
+Interval = 30
+ServerPort = 4050
+
+[History]
+HistDir = "/db/ndtp-hist.db"
+MaxRecords = 150000
+CleanInterval = 20
+
+[Message]
+LogDir = "/log/ndtp-message.log"
+APIAddr = "localhost"
+APIPort = 7200
+APIEndpoint = "/api/message-relay/inbound-server-message"

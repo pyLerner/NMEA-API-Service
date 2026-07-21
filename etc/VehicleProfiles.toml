@@ -1,0 +1,79 @@
+# =============================================================================
+# VehicleProfiles.toml — лимиты fusion для NavFusion (Kalman + гейты)
+# =============================================================================
+# Используется главным конфигом ([Navigation].Profile + VehicleProfilesPath).
+# Секции [tram], [bus], [custom] — взаимоисключающие пресеты; при старте
+# загружается ровно одна секция по имени Profile.
+#
+# VMaxKmh — максимальная правдоподобная скорость (км/ч) для гейта |Δpos|/Δt.
+#   Превышение → reject update (RMC или ECEF), только predict/coast.
+#
+# AMax — максимальное ускорение (м/с²) для гейта |Δv|/Δt между измерениями.
+#
+# THoldSec — время (с) без GNRMC, в течение которого ещё разрешён ECEF-update
+#   в Kalman (режим KF_ECEF). После — только COAST/DEGRADED.
+#
+# TLostSec — время (с) без принятого измерения (RMC/ECEF); далее quality=LOST,
+#   публикация новых точек прекращается.
+#
+# FrozenJumpM — при неподвижности (|Δpos| < StandstillPosM) не менее
+#   StandstillSec подряд: скачок позиции > FrozenJumpM за 1 с считается multipath.
+#
+# StandstillPosM — порог (м) приращения позиции для детектора стоянки.
+#
+# StandstillSec — число секунд подряд ниже StandstillPosM → v := 0, сильное сглаживание.
+#
+# InnovGateSigma — множитель k для innovation gating Kalman (отбрасывать update
+#   при |y| > k·√S).
+#
+# InnovGateMinM — минимальный порог innovation по позиции (м), независимо от σ.
+#
+# RmcInvalidInflate — во сколько раз увеличить R при is_valid=V в GNRMC.
+#
+# RmcSpeedZeroKmh — порог скорости из RMC (км/ч): ниже + малый Δpos → v := 0.
+#
+# RmcTrustModes — режимы GNRMC (mode), при которых позиция считается доверенной;
+#   при kinematic conflict выполняется hard reset к RMC, а не reject.
+# =============================================================================
+
+[tram]
+VMaxKmh = 25
+AMax = 1.0
+THoldSec = 12
+TLostSec = 60
+FrozenJumpM = 2.0
+StandstillPosM = 0.3
+StandstillSec = 3
+InnovGateSigma = 3.0
+InnovGateMinM = 2.0
+RmcInvalidInflate = 8.0
+RmcSpeedZeroKmh = 0.5
+RmcTrustModes = ["A", "D"]
+
+[bus]
+VMaxKmh = 80
+AMax = 2.5
+THoldSec = 25
+TLostSec = 90
+FrozenJumpM = 5.0
+StandstillPosM = 0.3
+StandstillSec = 3
+InnovGateSigma = 3.0
+InnovGateMinM = 5.0
+RmcInvalidInflate = 8.0
+RmcSpeedZeroKmh = 0.5
+RmcTrustModes = ["A", "D"]
+
+[custom]
+VMaxKmh = 40
+AMax = 1.8
+THoldSec = 15
+TLostSec = 75
+FrozenJumpM = 3.0
+StandstillPosM = 0.3
+StandstillSec = 3
+InnovGateSigma = 3.0
+InnovGateMinM = 3.0
+RmcInvalidInflate = 8.0
+RmcSpeedZeroKmh = 0.5
+RmcTrustModes = ["A", "D"]

@@ -1,33 +1,16 @@
+# -*- coding: utf-8 -*-
 """
-Unified async GNRMC application.
+Единое асинхронное приложение GNRMC / NavFusion v2 (UTF-8).
 
-This script starts:
-- NMEA reader (RS-232/RS-485) that parses $GNRMC/$GPRMC and $GNGGA/$GPGGA,
-  enriches records with satellites count, and appends them to an in-memory cache.
-- API server (FastAPI) that serves last coordinates and cached records with token auth.
-- Database auditor that enforces MaxRows retention policy periodically.
-
-Key changes vs. the original:
-- Single entry point launches all tasks concurrently.
-- In-memory cache (deque) size configured in [Memory].CacheRecordsLength.
-- Flush to DB all cache contents when CacheRecords new items were added since last flush.
-- Table schema extended with satellites_count.
-- /AllCoords returns cached data (not DB).
-- Fully asynchronous implementation using aiosqlite and FastAPI.
-- Rich type annotations, docstrings, and verbose comments.
-
-Dependencies:
-- fastapi, uvicorn[standard], aiosqlite
-- pyserial-asyncio (for async serial port; optional if you read from file/stdin)
-  Install: pip install fastapi uvicorn[standard] aiosqlite pyserial-asyncio
-
-Author: Vadim's unified GNRMC rewrite
+Оркестрация: NMEA reader, fusion tick, DB flusher, HTTP API в одном процессе.
+Конфигурация: TOML (--config), см. plan/KALMAN-ECEF-FUSION-v2.md.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 import signal
 from pathlib import Path
 from typing import Any
@@ -47,7 +30,8 @@ from log_config.log_config import setup_logger
 from models.data_models import load_config
 
 # Task Runner
-from runner_task import db_flusher_task, nmea_reader_task
+from runner_task import db_flusher_task, fusion_tick_task, nmea_reader_task
+from navigation.fusion import NavFusion
 
 # =============================================================================
 # Entry point and orchestration
@@ -66,14 +50,13 @@ async def main_async(args: argparse.Namespace) -> None:
     config_path = Path(args.config)
     cfg = load_config(config_path)
 
-    # Logger
-    Path(cfg.system.log_dir).mkdir(parents=True, exist_ok=True)
-    log_file = Path(cfg.system.log_dir).joinpath("gnrmc.log")
-    logger = setup_logger(log_file)
+    logger, nmea_row_logger = setup_logger(cfg.log)
 
     logger.info("=== GNRMC Unified App starting ===")
     logger.info(
-        "Config: %s | DB=%s | MaxRows=%d | Host=%s:%d | Workers=%d | CacheLen=%d | CacheTrigger=%d",
+        "Config: %s | DB=%s | MaxRows=%d | Host=%s:%d | Workers=%d | "
+        "CacheLen=%d | FlushBatch=%d | ResidualCache=%d | LogRowNMEA=%s | "
+        "Profile=%s | PublishMode=%s | OutputHz=%d | APIWorkers=%d",
         config_path,
         cfg.database.db_path,
         cfg.database.max_rows,
@@ -81,15 +64,31 @@ async def main_async(args: argparse.Namespace) -> None:
         cfg.api.port,
         cfg.api.workers,
         cfg.memory.cache_records_length,
-        cfg.memory.cache_records_trigger,
+        cfg.memory.flush_batch,
+        cfg.memory.residual_cache,
+        cfg.log.log_row_nmea,
+        cfg.navigation.profile_name,
+        cfg.navigation.publish_mode.value,
+        cfg.navigation.output_rate_hz,
+        cfg.api.workers,
     )
+
+    if cfg.api.workers > 1:
+        logger.warning(
+            "API Workers=%d: in-memory cache is not shared across uvicorn "
+            "worker processes; set [API] Workers = 1 for consistent last-coords",
+            cfg.api.workers,
+        )
 
     # DB
     db_conn = await init_db(cfg.database.db_path, logger)
 
     # Cache
     cache = RecordsCache(
-        cfg.memory.cache_records_length, cfg.memory.cache_records_trigger, logger
+        cfg.memory.cache_records_length,
+        cfg.memory.cache_records_trigger,
+        cfg.memory.residual_cache,
+        logger,
     )
 
     # Create API
@@ -102,18 +101,28 @@ async def main_async(args: argparse.Namespace) -> None:
     import uvicorn
 
     config = uvicorn.Config(
-        app=app, 
-        host=cfg.api.host, 
+        app=app,
+        host=cfg.api.host,
         port=cfg.api.port,
-        workers=cfg.api.workers, 
-        log_level="info", 
-        loop="asyncio"
+        workers=cfg.api.workers,
+        log_level=logging.getLevelName(cfg.log.log_level).lower(),
+        loop="asyncio",
     )
     server = uvicorn.Server(config=config)
 
-    # Tasks: reader, flusher, api
+    fusion = NavFusion(
+        cfg.navigation.profile,
+        publish_mode=cfg.navigation.publish_mode,
+        logger=logger,
+    )
+
+    # Tasks: reader, fusion tick, flusher, api
     reader_t = asyncio.create_task(
-        nmea_reader_task(cfg, cache, logger), name="nmea_reader"
+        nmea_reader_task(cfg, cache, logger, nmea_row_logger, fusion),
+        name="nmea_reader",
+    )
+    fusion_t = asyncio.create_task(
+        fusion_tick_task(cfg, fusion, cache, logger), name="fusion_tick"
     )
     flusher_t = asyncio.create_task(
         db_flusher_task(cfg, cache, db_conn, logger), name="db_flusher"
@@ -138,9 +147,9 @@ async def main_async(args: argparse.Namespace) -> None:
     await shutdown_event.wait()
 
     # Cancel background tasks
-    for t in (reader_t, flusher_t):
+    for t in (reader_t, fusion_t, flusher_t):
         t.cancel()
-    await asyncio.gather(reader_t, flusher_t, return_exceptions=True)
+    await asyncio.gather(reader_t, fusion_t, flusher_t, return_exceptions=True)
 
     # Stop API server if running
     if server:

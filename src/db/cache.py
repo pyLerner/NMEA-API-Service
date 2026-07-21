@@ -1,16 +1,20 @@
+# -*- coding: utf-8 -*-
 # =============================================================================
-# Cache and persistence
+# Кэш и персистентность (UTF-8)
 # =============================================================================
+"""In-memory deque координат; частичный flush в SQLite."""
 import asyncio
 import logging
 from collections import deque
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from api.record_format import format_record_for_api
+
 
 @dataclass
 class Record:
-    """Typed record to store in cache and persist to DB."""
+    """Запись координат для кэша и SQLite."""
 
     key_id: Optional[int]
     datetime: Optional[str]
@@ -23,20 +27,11 @@ class Record:
     direction: Optional[float]
     mode: Optional[str]
     satellites_count: Optional[int]
+    source: Optional[str] = "nmea"
+    quality: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            # "datetime": self.datetime,
-            # "is_valid": self.is_valid,
-            # "latitude": self.latitude,
-            # "latitude_hemi": self.latitude_hemi,
-            # "longitude": self.longitude,
-            # "longitude_hemi": self.longitude_hemi,
-            # "speed": self.speed,
-            # "direction": self.direction,
-            # "mode": self.mode,
-            # "satellites_count": self.satellites_count,
-            # Совместимость с предыдущей версией:
+        raw = {
             "record_id": self.key_id,
             "time": self.datetime,
             "is_valid": self.is_valid,
@@ -48,41 +43,45 @@ class Record:
             "direction": self.direction,
             "mode": self.mode,
             "satellites_count": self.satellites_count,
+            "source": self.source,
+            "quality": self.quality,
         }
+        return format_record_for_api(raw)
 
 
 class RecordsCache:
     """
-    In-memory cache with a bounded size and a flush trigger counter.
+    In-memory кэш с ограниченным размером и частичным flush в БД.
 
-    Behavior:
-    - Append records to a deque with maxlen = cache_records_length.
-    - Track count of new records since last DB flush.
-    - When count reaches cache_records_trigger, flush ALL records currently in cache.
-      After a successful flush, clear the cache and reset the counter.
-
-    Thread-safety:
-    - Designed for asyncio; use the provided async lock to coordinate access.
+    Поведение:
+    - Записи хранятся в deque с maxlen = cache_records_length.
+    - Счётчик новых записей с прошлого flush.
+    - При достижении flush_batch (CacheRecords - ResidualCache) снимается
+      flush_batch старейших записей для записи в БД; ResidualCache новейших
+      остаются в кэше (без дублирования в SQLite на следующем шаге).
     """
 
     def __init__(
         self,
         cache_records_length: int,
         cache_records_trigger: int,
+        residual_cache: int,
         logger: logging.Logger,
     ) -> None:
         self._cache: deque[Record] = deque(maxlen=cache_records_length)
         self._since_last_flush: int = 0
-        self._trigger: int = cache_records_trigger
+        self._flush_batch = cache_records_trigger - residual_cache
+        self._residual = residual_cache
+        self._trigger = self._flush_batch
         self._lock = asyncio.Lock()
         self._logger = logger
 
     async def add(self, rec: Record) -> bool:
         """
-        Add a record to cache.
+        Добавить запись в кэш.
 
         Returns:
-            True if a flush should be triggered after this addition.
+            True, если после добавления нужен flush в БД.
         """
         async with self._lock:
             self._cache.append(rec)
@@ -97,27 +96,30 @@ class RecordsCache:
             return should_flush
 
     async def snapshot(self) -> list[Record]:
-        """
-        Return a snapshot list of records currently in cache.
-
-        Use for API responses (/AllCoords).
-        """
+        """Снимок текущего содержимого кэша (для API)."""
         async with self._lock:
             return list(self._cache)
 
-    async def flush_all(self) -> list[Record]:
+    async def flush_batch(self) -> list[Record]:
         """
-        Return all records and clear cache, resetting the counter.
+        Снять старейшие записи для записи в БД, оставив ResidualCache новейших.
 
         Returns:
-            A list of records to persist.
+            Список записей для insert_many (может быть пустым).
         """
         async with self._lock:
-            data = list(self._cache)
-            self._cache.clear()
+            n = min(self._flush_batch, len(self._cache) - self._residual)
+            if n <= 0:
+                self._since_last_flush = 0
+                return []
+
+            to_persist = [self._cache.popleft() for _ in range(n)]
             count_before = self._since_last_flush
             self._since_last_flush = 0
             self._logger.info(
-                "Flushing %d cached records (counter was %d)", len(data), count_before
+                "Flushing %d cached records (counter was %d, %d remain in cache)",
+                len(to_persist),
+                count_before,
+                len(self._cache),
             )
-            return data
+            return to_persist

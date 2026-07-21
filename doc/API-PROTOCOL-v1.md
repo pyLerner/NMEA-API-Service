@@ -45,17 +45,18 @@ Authorization: Bearer <token>
 
 API возвращает записи в формате (совместимость со старым контрактом):
 
-- `record_id` (`integer | null`) — идентификатор записи.
+- `record_id` (`integer`) — идентификатор записи; `0` если запись ещё не сброшена в БД.
 - `time` (`string | null`) — ISO8601 UTC timestamp.
 - `is_valid` (`"A" | "V" | null`) — валидность фикса.
-- `latitude` (`number | null`) — широта в decimal degrees.
+- `latitude` (`number`) — широта в decimal degrees, **7** знаков после запятой; `null` в источнике → `0.0`.
 - `lat_hemisphere` (`"N" | "S" | null`) — полушарие широты.
-- `longitude` (`number | null`) — долгота в decimal degrees.
+- `longitude` (`number`) — долгота в decimal degrees, **7** знаков после запятой; `null` в источнике → `0.0`.
 - `lon_hemisphere` (`"E" | "W" | null`) — полушарие долготы.
-- `speed` (`number | null`) — скорость (узлы).
-- `direction` (`number | null`) — курс (градусы).
+- `speed` (`number`) — скорость **км/ч**, **1** знак после запятой; `null` в источнике → `0.0`.
+- `direction` (`number`) — курс (градусы), **1** знак после запятой; `null` в источнике → `0.0`.
 - `mode` (`"E" | "D" | "A" | "N" | null`) — режим.
-- `satellites_count` (`integer | null`) — число спутников.
+- `satellites_count` (`integer`) — число спутников; `null` в источнике → `0`.
+- `source` (`string | null`) — источник данных (`nmea` — RMC, `ecef` — ECEFPOSVEL).
 
 ## 4. Эндпоинты
 

@@ -1,0 +1,33 @@
+# Dev compose: local build and bind-mounts for development on target board.
+# Production deploy uses docker/docker/docker-compose.yml and build-off-board.sh bundle.
+
+services:
+  navterminal:
+    image: navigator:2-kalman-ecef
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      network: host
+    container_name: navterminal-dev
+    restart: always
+    tmpfs:
+      - /tmp:exec,size=1G,mode=1777
+    network_mode: host
+    devices:
+      - "/dev/ttyS0:/dev/ttyS0"
+      - "/dev/ttyS3:/dev/ttyS3"
+    volumes:
+      - ./etc:/etc/navigator:ro
+      - ./NavAPIServer/db:/db:rw
+      - ./log:/log:rw
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "5"
+    group_add:
+      - dialout
+    stop_signal: SIGTERM
+    stop_grace_period: 10s
