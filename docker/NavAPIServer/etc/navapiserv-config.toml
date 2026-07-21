@@ -2,15 +2,30 @@
 DB = "/db/gnrmc.db"
 MaxRows = 150000
 
-[Hardware]
+[Sources.nmea]
+Enabled = true
+Type = "serial-nmea"
 HardwarePort = "/dev/ttyS0"
 Baud = 19200
+
+[Sources.qr-geo]
+Enabled = false
+Type = "qr-geo"
+
+[Sources.imu]
+Enabled = false
+Type = "imu"
+
+[Sources.triangulation]
+Enabled = false
+Type = "triangulation-http"
 
 [API]
 Host = "0.0.0.0"
 HTTP_Port = 7100
 Workers = 5
 Token = "A0473A67-27A1-3C05-A2D1-5C134639347F"
+SseKeepaliveSec = 15
 
 [System]
 ProgramDirectory = "/app"

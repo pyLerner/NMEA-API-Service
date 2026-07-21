@@ -6,8 +6,9 @@
 import logging
 import re
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from navigation.enums import PublishMode
 
@@ -82,12 +83,27 @@ class HardwareConfig:
 
 @dataclass(frozen=True)
 class ApiConfig:
-    """Параметры HTTP API (хост, порт, токен)."""
+    """Параметры HTTP API (хост, порт, токен, SSE keepalive)."""
 
     host: str
     port: int
     workers: int
     token: str
+    sse_keepalive_sec: float = 15.0
+
+
+@dataclass(frozen=True)
+class SourceProviderConfig:
+    """
+    Один провайдер из секции [Sources.<name>].
+
+    params — провайдер-специфичные ключи (HardwarePort/Baud, Url, …).
+    """
+
+    name: str
+    enabled: bool
+    type: str
+    params: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -205,6 +221,7 @@ class AppConfig:
     log: LogConfig
     memory: MemoryConfig
     navigation: NavigationConfig
+    sources: tuple[SourceProviderConfig, ...] = ()
 
 
 def _load_log_config(raw: dict, sys_: dict) -> LogConfig:
@@ -342,6 +359,81 @@ def _validate_memory_config(mem: MemoryConfig) -> None:
         )
 
 
+_SOURCE_META_KEYS = frozenset({"Enabled", "Type", "enabled", "type"})
+
+
+def _load_sources(
+    raw: dict,
+    legacy_hw: dict,
+) -> tuple[tuple[SourceProviderConfig, ...], HardwareConfig]:
+    """
+    Загрузить [Sources.*]; HardwarePort/Baud — из [Sources.nmea].
+
+    Если нет Sources.nmea, но есть legacy [Hardware] — виртуальный nmea-провайдер.
+    """
+    sources_raw = raw.get("Sources")
+    providers: list[SourceProviderConfig] = []
+
+    if isinstance(sources_raw, dict):
+        for name, section in sources_raw.items():
+            if not isinstance(section, dict):
+                continue
+            enabled = bool(section.get("Enabled", section.get("enabled", False)))
+            ptype = str(section.get("Type", section.get("type", name))).strip()
+            params = {
+                k: v for k, v in section.items() if k not in _SOURCE_META_KEYS
+            }
+            providers.append(
+                SourceProviderConfig(
+                    name=str(name),
+                    enabled=enabled,
+                    type=ptype,
+                    params=params,
+                )
+            )
+
+    nmea = next((p for p in providers if p.name == "nmea"), None)
+
+    if nmea is not None:
+        port = str(
+            nmea.params.get(
+                "HardwarePort",
+                legacy_hw.get("HardwarePort", "/dev/ttyS3"),
+            )
+        )
+        baud = int(nmea.params.get("Baud", legacy_hw.get("Baud", 9600)))
+    elif legacy_hw:
+        port = str(legacy_hw.get("HardwarePort", "/dev/ttyS3"))
+        baud = int(legacy_hw.get("Baud", 9600))
+        providers.insert(
+            0,
+            SourceProviderConfig(
+                name="nmea",
+                enabled=True,
+                type="serial-nmea",
+                params={
+                    "HardwarePort": port,
+                    "Baud": baud,
+                },
+            ),
+        )
+    else:
+        # Нет ни Sources, ни Hardware — default nmea enabled (как раньше).
+        port = "/dev/ttyS3"
+        baud = 9600
+        if not providers:
+            providers.append(
+                SourceProviderConfig(
+                    name="nmea",
+                    enabled=True,
+                    type="serial-nmea",
+                    params={"HardwarePort": port, "Baud": baud},
+                )
+            )
+
+    return tuple(providers), HardwareConfig(port=port, baud=baud)
+
+
 def load_config(path: Path) -> AppConfig:
     """
     Загрузить TOML-конфиг и вернуть AppConfig.
@@ -371,21 +463,24 @@ def load_config(path: Path) -> AppConfig:
 
     config_dir = path.parent
     navigation = _load_navigation_config(raw, config_dir)
+    sources, hardware = _load_sources(raw, hw if isinstance(hw, dict) else {})
+
+    sse_keepalive = float(api.get("SseKeepaliveSec", 15))
+    if sse_keepalive <= 0:
+        raise ValueError("API.SseKeepaliveSec must be > 0")
 
     return AppConfig(
         database=DatabaseConfig(
             db_path=db.get("DB", "data/gnrmc.db"),
             max_rows=int(db.get("MaxRows", 150_000)),
         ),
-        hardware=HardwareConfig(
-            port=hw.get("HardwarePort", "/dev/ttyS3"),
-            baud=int(hw.get("Baud", 9600)),
-        ),
+        hardware=hardware,
         api=ApiConfig(
             host=api.get("Host", "0.0.0.0"),
             port=int(api.get("HTTP_Port", 7000)),
             workers=int(api.get("Workers", 1)),
             token=str(api.get("Token", "123")),
+            sse_keepalive_sec=sse_keepalive,
         ),
         system=SystemConfig(
             program_directory=sys_.get("ProgramDirectory", "/usr/local/gnrmc"),
@@ -395,4 +490,5 @@ def load_config(path: Path) -> AppConfig:
         log=_load_log_config(raw, sys_),
         memory=memory,
         navigation=navigation,
+        sources=sources,
     )

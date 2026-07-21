@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Optional
+from typing import Optional, Union
 
 import aiosqlite
 
@@ -35,6 +35,9 @@ from serial_port.line_iterators import (
     iter_reopenable_serial_lines,
     iter_stdin_lines,
 )
+from sources.hub import PositionHub
+
+PublishTarget = Union[RecordsCache, PositionHub]
 
 
 def fusion_output_to_record(out: FusionOutput) -> Record:
@@ -55,20 +58,24 @@ def fusion_output_to_record(out: FusionOutput) -> Record:
     )
 
 
-async def _cache_fusion_output(cache: RecordsCache, out: FusionOutput) -> None:
-    await cache.add(fusion_output_to_record(out))
+async def _publish_fusion_output(target: PublishTarget, out: FusionOutput) -> None:
+    rec = fusion_output_to_record(out)
+    if isinstance(target, PositionHub):
+        await target.publish_record(rec)
+    else:
+        await target.add(rec)
 
 
 async def fusion_tick_task(
     cfg: AppConfig,
     fusion: NavFusion,
-    cache: RecordsCache,
+    target: PublishTarget,
     logger: logging.Logger,
 ) -> None:
     """
     Периодический predict Kalman на частоте OutputRateHz.
 
-    При PublishMode timer/hybrid и should_publish_timer() — запись в кэш.
+    При PublishMode timer/hybrid и should_publish_timer() — запись в кэш/Hub.
     """
     interval = 1.0 / cfg.navigation.output_rate_hz
     logger.info(
@@ -83,7 +90,7 @@ async def fusion_tick_task(
             if fusion.should_publish_timer():
                 out = fusion.build_publish_output()
                 if out is not None:
-                    await _cache_fusion_output(cache, out)
+                    await _publish_fusion_output(target, out)
     except asyncio.CancelledError:
         logger.info("Fusion tick task cancelled")
         raise
@@ -95,7 +102,7 @@ fusion_output_task = fusion_tick_task
 
 async def nmea_reader_task(
     cfg: AppConfig,
-    cache: RecordsCache,
+    target: PublishTarget,
     logger: logging.Logger,
     nmea_row_logger: Optional[logging.Logger],
     fusion: NavFusion,
@@ -103,7 +110,7 @@ async def nmea_reader_task(
     """
     Читать NMEA (serial / файл / stdin), логировать сырьё, кормить NavFusion.
 
-    При ненулевом FusionOutput от ingest — запись в RecordsCache.
+    При ненулевом FusionOutput от ingest — публикация в RecordsCache или PositionHub.
     """
     latest_satellites: Optional[int] = None
     serial_restart_done = False
@@ -135,7 +142,7 @@ async def nmea_reader_task(
                 out = fusion.ingest_ecef(rec)
 
         if out is not None:
-            await _cache_fusion_output(cache, out)
+            await _publish_fusion_output(target, out)
 
     if cfg.system.stdin:
         async for line in iter_stdin_lines():

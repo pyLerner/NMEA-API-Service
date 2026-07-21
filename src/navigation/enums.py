@@ -42,8 +42,12 @@ class NavQuality(str, Enum):
 
 
 class NavSource(str, Enum):
-    """Источник последнего измерения, повлиявшего на точку."""
+    """
+    Составной source последнего измерения (семейство nmea).
 
-    NMEA = "nmea"
-    ECEF = "ecef"
-    FUSION = "fusion"
+    Значения совпадают с API: nmea/rmc, nmea/ecef, nmea/fusion.
+    """
+
+    NMEA = "nmea/rmc"
+    ECEF = "nmea/ecef"
+    FUSION = "nmea/fusion"

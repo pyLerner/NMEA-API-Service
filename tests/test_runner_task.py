@@ -94,7 +94,7 @@ def test_reader_rmc_publishes_good_quality(tmp_path: Path) -> None:
 
     snapshot = asyncio.run(cache.snapshot())
     assert len(snapshot) == 1
-    assert snapshot[0].source == "nmea"
+    assert snapshot[0].source == "nmea/rmc"
     assert snapshot[0].quality == "GOOD"
 
 

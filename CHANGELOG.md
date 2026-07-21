@@ -1,5 +1,36 @@
 # Changelog
 
+## v2.2-multi-source-hub
+
+Каркас нескольких источников навигации и API `/api/navigator/v2/`.
+
+### Position Hub и провайдеры
+
+- Пакет [`src/sources/`](src/sources/): `PositionHub`, `NavPositionEvent`, Protocol адаптера, factory.
+- Общий поток (interleave): все включённые провайдеры пишут в один `RecordsCache`.
+- NMEA вынесен в `NmeaSerialAdapter` (reader + fusion tick → Hub).
+- Stubs (без публикации координат): `qr-geo`, `imu`, `triangulation-http` — при `Enabled=true` только warning «not implemented».
+- Составное поле `source` на всех API: `nmea/rmc`, `nmea/ecef`, `nmea/fusion`, а также `qr` / `imu` / `triangulation` (зарезервировано).
+
+### Конфигурация
+
+- `[Hardware]` перенесён в `[Sources.nmea]` (`HardwarePort`, `Baud`).
+- Секции `[Sources.qr-geo]`, `[Sources.imu]`, `[Sources.triangulation]` в шаблонах TOML.
+- Legacy: если есть только `[Hardware]` без `[Sources.nmea]` — смапится во включённый nmea.
+- `[API].SseKeepaliveSec` — интервал SSE ping (по умолчанию `15`).
+
+### API
+
+- `GET /api/navigator/v2/last-coords?provider=` — SSE: `data:` в формате тела v1/last-coords; при простое — `event: ping`.
+- `GET /api/navigator/v2/all-coords?provider=&from=&to=` — до 1000 точек; все параметры опциональны.
+- Фильтр `provider` — семейство `source` (сегмент до `/`).
+- Пути `/api/navigator/v2/*` публичные (без Bearer), как `/v1/`.
+- Legacy и `/api/navigator/v1/` без смены путей; в `source` — новый составной формат.
+
+### Документация
+
+- [doc/API-PROTOCOL-v2.md](doc/API-PROTOCOL-v2.md): Hub, `source`, SSE, all-coords filters, `[Sources.*]`.
+
 ## v2.1-kalman-fusion
 
 Спецификация: [plan/KALMAN-ECEF-FUSION-v2.md](plan/KALMAN-ECEF-FUSION-v2.md).
