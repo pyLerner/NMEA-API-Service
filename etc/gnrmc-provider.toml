@@ -10,7 +10,7 @@
 #
 # [Sources.<name>] — провайдеры навигации (Enabled / Type + свои поля)
 #   [Sources.nmea] — serial/file/stdin NMEA (HardwarePort, Baud).
-#   [Sources.qr-geo] — заглушка: будущий SSE QR-reader + geo-lookup.
+#   [Sources.qr-geo] — SSE QR-reader + geo-lookup (EventsUrl, GeoDbPath, …).
 #   [Sources.imu] — заглушка акселерометра / IMU.
 #   [Sources.triangulation] — заглушка HTTP-клиента триангуляции оператора.
 #   Legacy: если [Sources.nmea] нет, а есть [Hardware] — смапится в nmea.
@@ -20,8 +20,8 @@
 #   HTTP_Port — TCP-порт API.
 #   Workers — число воркеров uvicorn; ОБЯЗАТЕЛЬНО 1: кэш обновляется в процессе
 #     reader/fusion, а не в HTTP-воркерах.
-#   Token — Bearer-токен для legacy-эндпоинтов (/LastCoords и т.д.).
-#   SseKeepaliveSec — интервал ping для SSE /api/navigator/v2/last-coords.
+#   Token — Bearer-токен для legacy и /api/qr-geo (fallback, если нет NAVAPI_API_TOKEN).
+#   В Docker задавайте NAVAPI_API_TOKEN через .env / compose environment.
 #
 # [System]
 #   ProgramDirectory — служебный каталог приложения.
@@ -70,6 +70,12 @@ Baud = 9600
 [Sources.qr-geo]
 Enabled = false
 Type = "qr-geo"
+EventsUrl = "http://127.0.0.1:8000/api/qr-reader/v1/events"
+GeoDbPath = "data/qr_geo.db"
+ConnectTimeoutMs = 5000
+ReconnectMinMs = 500
+ReconnectMaxMs = 30000
+DedupWindowSec = 5
 
 [Sources.imu]
 Enabled = false
@@ -88,7 +94,8 @@ Type = "triangulation-http"
 Host = "0.0.0.0"
 HTTP_Port = 7000
 Workers = 1
-Token = "A0473A67-27A1-3C05-A2D1-5C134639347F"
+# Prefer NAVAPI_API_TOKEN env (Docker .env). Token below is local/dev fallback only.
+Token = ""
 SseKeepaliveSec = 30
 
 [System]

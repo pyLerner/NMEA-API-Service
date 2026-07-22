@@ -21,9 +21,12 @@ from models.data_models import (
     LogConfig,
     MemoryConfig,
     NavigationConfig,
+    SourceProviderConfig,
     SystemConfig,
     _load_navigation_config,
 )
+from qr_geo.lookup import QrGeoLookup
+from qr_geo.store import QrGeoStore
 
 TEST_TOKEN = "test-bearer-token-for-api-tests"
 PROJECT_ETC = Path(__file__).resolve().parent.parent / "etc"
@@ -45,7 +48,7 @@ def _default_navigation() -> NavigationConfig:
     )
 
 
-def _make_cfg(db_path: Path) -> AppConfig:
+def _make_cfg(db_path: Path, qr_db_path: Path) -> AppConfig:
     return AppConfig(
         database=DatabaseConfig(db_path=str(db_path), max_rows=10_000),
         hardware=HardwareConfig(port="/dev/null", baud=9600),
@@ -70,6 +73,20 @@ def _make_cfg(db_path: Path) -> AppConfig:
             residual_cache=10,
         ),
         navigation=_default_navigation(),
+        sources=(
+            SourceProviderConfig(
+                name="nmea",
+                enabled=True,
+                type="serial-nmea",
+                params={"HardwarePort": "/dev/null", "Baud": 9600},
+            ),
+            SourceProviderConfig(
+                name="qr-geo",
+                enabled=False,
+                type="qr-geo",
+                params={"GeoDbPath": str(qr_db_path)},
+            ),
+        ),
     )
 
 
@@ -86,14 +103,27 @@ async def _init_db_once(db_path: str, logger: logging.Logger) -> None:
     await conn.close()
 
 
+async def _open_qr_lookup(qr_db: Path, logger: logging.Logger) -> QrGeoLookup:
+    store = QrGeoStore(str(qr_db), logger)
+    await store.open()
+    lookup = QrGeoLookup(store, logger)
+    await lookup.reload()
+    return lookup
+
+
 @pytest.fixture
 def tmp_db_path(tmp_path: Path) -> Path:
     return tmp_path / "test_gnrmc.sqlite"
 
 
 @pytest.fixture
-def app_config(tmp_db_path: Path) -> AppConfig:
-    return _make_cfg(tmp_db_path)
+def tmp_qr_db_path(tmp_path: Path) -> Path:
+    return tmp_path / "test_qr_geo.sqlite"
+
+
+@pytest.fixture
+def app_config(tmp_db_path: Path, tmp_qr_db_path: Path) -> AppConfig:
+    return _make_cfg(tmp_db_path, tmp_qr_db_path)
 
 
 @pytest.fixture
@@ -112,9 +142,19 @@ def cache(app_config: AppConfig, logger: logging.Logger) -> RecordsCache:
 
 
 @pytest.fixture
-def app(app_config: AppConfig, cache: RecordsCache, logger: logging.Logger):
+def qr_geo_lookup(tmp_qr_db_path: Path, logger: logging.Logger) -> QrGeoLookup:
+    return asyncio.run(_open_qr_lookup(tmp_qr_db_path, logger))
+
+
+@pytest.fixture
+def app(
+    app_config: AppConfig,
+    cache: RecordsCache,
+    logger: logging.Logger,
+    qr_geo_lookup: QrGeoLookup,
+):
     asyncio.run(_init_db_once(app_config.database.db_path, logger))
-    return create_app(app_config, cache, logger)
+    return create_app(app_config, cache, logger, qr_geo_lookup=qr_geo_lookup)
 
 
 @pytest.fixture

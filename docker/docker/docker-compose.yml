@@ -5,6 +5,10 @@ services:
     container_name: navigator
     restart: unless-stopped
     network_mode: host
+    env_file:
+      - .env
+    environment:
+      NAVAPI_API_TOKEN: ${NAVAPI_API_TOKEN}
     tmpfs:
       - /tmp:exec,size=1G,mode=1777
     devices:

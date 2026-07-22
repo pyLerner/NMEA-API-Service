@@ -7,10 +7,12 @@ import logging
 from typing import Optional
 
 from models.data_models import AppConfig, SourceProviderConfig
+from qr_geo.lookup import QrGeoLookup
 from sources.adapter import NavSourceAdapter
 from sources.hub import PositionHub
 from sources.nmea_adapter import NmeaSerialAdapter
-from sources.stubs import ImuStubAdapter, QrGeoStubAdapter, TriangulationHttpStubAdapter
+from sources.qr_adapter import QrGeoAdapter
+from sources.stubs import ImuStubAdapter, TriangulationHttpStubAdapter
 
 
 def build_adapters(
@@ -18,13 +20,16 @@ def build_adapters(
     hub: PositionHub,
     logger: logging.Logger,
     nmea_row_logger: Optional[logging.Logger] = None,
+    qr_geo_lookup: Optional[QrGeoLookup] = None,
 ) -> list[NavSourceAdapter]:
     """Создать адаптеры для всех Enabled провайдеров."""
     adapters: list[NavSourceAdapter] = []
     for provider in cfg.sources:
         if not provider.enabled:
             continue
-        adapter = _build_one(provider, cfg, hub, logger, nmea_row_logger)
+        adapter = _build_one(
+            provider, cfg, hub, logger, nmea_row_logger, qr_geo_lookup
+        )
         if adapter is not None:
             adapters.append(adapter)
             logger.info(
@@ -49,6 +54,7 @@ def _build_one(
     hub: PositionHub,
     logger: logging.Logger,
     nmea_row_logger: Optional[logging.Logger],
+    qr_geo_lookup: Optional[QrGeoLookup],
 ) -> NavSourceAdapter | None:
     ptype = provider.type.strip().lower()
     params = provider.params
@@ -57,7 +63,12 @@ def _build_one(
         return NmeaSerialAdapter(cfg, hub, logger, nmea_row_logger)
 
     if ptype == "qr-geo":
-        return QrGeoStubAdapter(hub, logger, **params)
+        if qr_geo_lookup is None:
+            logger.error(
+                "Provider qr-geo enabled but QrGeoLookup is not initialized"
+            )
+            return None
+        return QrGeoAdapter.from_params(hub, qr_geo_lookup, logger, params)
 
     if ptype == "imu":
         return ImuStubAdapter(hub, logger, **params)

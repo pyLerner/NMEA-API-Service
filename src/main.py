@@ -15,6 +15,8 @@ import signal
 from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
+
 # FastAPI app
 from api_server import create_app
 
@@ -28,6 +30,9 @@ from log_config.log_config import setup_logger
 
 # Config from Toml
 from models.data_models import load_config
+from qr_geo.config import geo_db_path_from_config
+from qr_geo.lookup import QrGeoLookup
+from qr_geo.store import QrGeoStore
 
 # Task Runner
 from runner_task import db_flusher_task
@@ -48,12 +53,18 @@ async def main_async(args: argparse.Namespace) -> None:
     - Launch enabled source adapters, DB flusher, API server
     - Handle graceful shutdown on SIGINT/SIGTERM
     """
+    load_dotenv()
     config_path = Path(args.config)
     cfg = load_config(config_path)
 
     logger, nmea_row_logger = setup_logger(cfg.log)
 
     enabled_sources = [p.name for p in cfg.sources if p.enabled]
+    if not cfg.api.token:
+        logger.warning(
+            "API token is empty: set NAVAPI_API_TOKEN or [API].Token "
+            "(legacy and /api/qr-geo require Bearer)"
+        )
     logger.info("=== GNRMC Unified App starting ===")
     logger.info(
         "Config: %s | DB=%s | MaxRows=%d | Host=%s:%d | Workers=%d | "
@@ -96,8 +107,14 @@ async def main_async(args: argparse.Namespace) -> None:
     )
     hub = PositionHub(cache, logger)
 
+    # QR geo catalog (available even if Sources.qr-geo Enabled=false)
+    qr_store = QrGeoStore(geo_db_path_from_config(cfg), logger)
+    await qr_store.open()
+    qr_lookup = QrGeoLookup(qr_store, logger)
+    await qr_lookup.reload()
+
     # Create API
-    app = create_app(cfg, cache, logger, hub=hub)
+    app = create_app(cfg, cache, logger, hub=hub, qr_geo_lookup=qr_lookup)
 
     # Prepare UVicorn server programmatically
     import uvicorn
@@ -113,7 +130,9 @@ async def main_async(args: argparse.Namespace) -> None:
     server = uvicorn.Server(config=config)
 
     stop_event = asyncio.Event()
-    adapters = build_adapters(cfg, hub, logger, nmea_row_logger)
+    adapters = build_adapters(
+        cfg, hub, logger, nmea_row_logger, qr_geo_lookup=qr_lookup
+    )
     adapter_tasks = [
         asyncio.create_task(adapter.run(stop_event), name=f"source:{adapter.name}")
         for adapter in adapters
@@ -150,6 +169,7 @@ async def main_async(args: argparse.Namespace) -> None:
     if server:
         await server.shutdown()
 
+    await qr_store.close()
     await db_conn.close()
     logger.info("=== GNRMC Unified App stopped ===")
 

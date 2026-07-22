@@ -9,9 +9,10 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Optional
+from typing import TYPE_CHECKING, Any, AsyncIterator, Optional
 
 import aiosqlite
+from api.qr_geo_routes import router as qr_geo_router
 from api.record_format import format_record_for_api
 from db.cache import RecordsCache, _parse_record_time
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -19,6 +20,9 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from models.data_models import AppConfig
 from sources.hub import PositionHub, matches_provider
 from starlette.middleware.base import BaseHTTPMiddleware
+
+if TYPE_CHECKING:
+    from qr_geo.lookup import QrGeoLookup
 
 
 def _json_keys_to_kebab(obj: Any) -> Any:
@@ -62,18 +66,20 @@ def create_app(
     cache: RecordsCache,
     logger: logging.Logger,
     hub: Optional[PositionHub] = None,
+    qr_geo_lookup: Optional["QrGeoLookup"] = None,
 ) -> FastAPI:
     """
     Create and configure the FastAPI application with bearer token auth
-    for legacy paths; navigator v1/v2 and GET /api/ping are public.
+    for legacy paths and /api/qr-geo/*; navigator v1/v2 and GET /api/ping are public.
     """
     app = FastAPI(title="GNRMC API", version="2.0")
     if hub is None:
         hub = PositionHub(cache, logger)
+    app.state.qr_geo_lookup = qr_geo_lookup
 
     class AuthMiddleware(BaseHTTPMiddleware):
         """
-        Bearer token authorization middleware for legacy endpoints only.
+        Bearer token authorization for legacy and /api/qr-geo/*.
         Public: GET /api/ping and /api/navigator/v1|v2/*
         """
 
@@ -91,7 +97,7 @@ def create_app(
 
             token = auth_header.removeprefix("Bearer ").strip()
             if token != str(cfg.api.token):
-                logger.warning("Unauthorized access with invalid token: %s", token)
+                logger.warning("Unauthorized access with invalid Bearer token")
                 return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
 
             return await call_next(request)
@@ -370,4 +376,5 @@ def create_app(
             },
         )
 
+    app.include_router(qr_geo_router)
     return app

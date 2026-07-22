@@ -4,6 +4,7 @@
 # =============================================================================
 
 import logging
+import os
 import re
 import tomllib
 from dataclasses import dataclass, field
@@ -11,6 +12,20 @@ from pathlib import Path
 from typing import Any
 
 from navigation.enums import PublishMode
+
+ENV_API_TOKEN = "NAVAPI_API_TOKEN"
+
+
+def resolve_api_token(toml_token: str) -> str:
+    """
+    Bearer-токен: ``NAVAPI_API_TOKEN`` из окружения, иначе ``API.Token`` из TOML.
+
+    Env задаётся через compose ``env_file: .env`` / ``environment``.
+    """
+    env_token = os.environ.get(ENV_API_TOKEN, "").strip()
+    if env_token:
+        return env_token
+    return str(toml_token).strip()
 
 _SIZE_SUFFIX = {
     "k": 1024,
@@ -469,6 +484,9 @@ def load_config(path: Path) -> AppConfig:
     if sse_keepalive <= 0:
         raise ValueError("API.SseKeepaliveSec must be > 0")
 
+    toml_token = str(api.get("Token", "123"))
+    token = resolve_api_token(toml_token)
+
     return AppConfig(
         database=DatabaseConfig(
             db_path=db.get("DB", "data/gnrmc.db"),
@@ -479,7 +497,7 @@ def load_config(path: Path) -> AppConfig:
             host=api.get("Host", "0.0.0.0"),
             port=int(api.get("HTTP_Port", 7000)),
             workers=int(api.get("Workers", 1)),
-            token=str(api.get("Token", "123")),
+            token=token,
             sse_keepalive_sec=sse_keepalive,
         ),
         system=SystemConfig(

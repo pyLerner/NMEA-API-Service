@@ -31,11 +31,14 @@ cd NavigatorDockerApp
 sudo ./install-docker-from-tar.sh --copy-to-opt
 ```
 
-3. Отредактировать конфиги:
+3. Отредактировать конфиги и секрет:
 
 ```bash
 sudo nano /opt/navigator/etc/navapiserv-config.toml
 sudo nano /opt/navigator/etc/ndtp-client.toml
+# Создать /opt/navigator/.env рядом с docker-compose.yml:
+#   NAVAPI_API_TOKEN=<секрет>
+# Пример: docker/.env.example в репозитории.
 ```
 
 4. Перезапустить:
@@ -49,8 +52,9 @@ cd /opt/navigator && sudo docker compose up -d --no-build
 ```
 /opt/navigator/
   docker-compose.yml
+  .env            # NAVAPI_API_TOKEN (не в git)
   etc/          → /etc/navigator (ro)
-  db/           → /db (rw)
+  db/           → /db (rw)  # gnrmc.db + qr_geo.db
   log/          → /log (rw)
 ```
 
@@ -62,13 +66,18 @@ cd /opt/navigator && sudo docker compose up -d --no-build
 /bin/NDTP_Client
 /bin/NDTPClient           # symlink
 /etc/navigator/*.toml
-/db/
+/db/                      # gnrmc.db, qr_geo.db
 /log/
 ```
+
+## Токен API
+
+Compose передаёт `NAVAPI_API_TOKEN` из `.env` в контейнер (`env_file` + `environment`). Это один Bearer для legacy и `/api/qr-geo`. Ротация: сменить `.env` → `docker compose up -d --force-recreate` → обновить клиенты. Полная проверка с камерой и QR-reader — на стендовой среде.
 
 ## Локальная dev-сборка на плате
 
 ```bash
 cd docker
+cp .env.example .env   # задать NAVAPI_API_TOKEN
 docker compose -f docker-compose.dev.yml up -d --build
 ```

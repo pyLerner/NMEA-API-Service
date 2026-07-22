@@ -95,7 +95,12 @@ uv sync --group dev
   - `Host` — адрес биндинга API;
   - `HTTP_Port` — TCP порт API;
   - `Workers` — число воркеров uvicorn; **должно быть `1`** (in-memory кэш обновляется в процессе reader/fusion, не в HTTP-воркерах);
-  - `Token` — Bearer-токен авторизации.
+  - `Token` — Bearer-токен (fallback для local/pytest); в Docker задавайте **`NAVAPI_API_TOKEN`** через `.env`.
+  - `SseKeepaliveSec` — интервал SSE ping.
+- `[Sources.qr-geo]` — провайдер QR (можно `Enabled=false`, справочник всё равно доступен через API):
+  - `EventsUrl` — SSE QR-reader (`…/api/qr-reader/v1/events`);
+  - `GeoDbPath` — отдельный SQLite справочника;
+  - `DedupWindowSec`, `ConnectTimeoutMs`, `ReconnectMinMs` / `ReconnectMaxMs`.
 - `[System]`
   - `ProgramDirectory` — служебный каталог приложения;
   - `Input` — путь к входному файлу NMEA (если непустой, выбирается file-режим);
@@ -168,7 +173,16 @@ uv run python src/main.py --config /absolute/path/to/gnrmc.toml
 Authorization: Bearer <token>
 ```
 
-(`<token>` = `[API].Token` в TOML.) Полное описание: [doc/API-PROTOCOL-v1.md](doc/API-PROTOCOL-v1.md).
+(`<token>` = env `NAVAPI_API_TOKEN`, иначе `[API].Token`.) Полное описание: [doc/API-PROTOCOL-v1.md](doc/API-PROTOCOL-v1.md).
+
+### Справочник QR (`/api/qr-geo/v1/`)
+
+- `POST /api/qr-geo/v1/catalog:replace` — полная перезапись справочника из CSV/JSON (Bearer).
+- `POST /api/qr-geo/v1/catalog:append` — upsert к существующему каталогу (Bearer).
+
+Токен тот же, что для legacy. В Docker: файл `.env` с `NAVAPI_API_TOKEN` (см. [`.env.example`](.env.example), [`docker/.env.example`](docker/.env.example)). Ротация: сменить значение в `.env` → recreate контейнера → обновить Bearer у клиентов. Проверка с реальной камерой — на стенде.
+
+Подробности: [doc/API-PROTOCOL-v2.md](doc/API-PROTOCOL-v2.md) §6, план [plan/04_QR-GEO-PROVIDER.md](plan/04_QR-GEO-PROVIDER.md).
 
 ### Служебные URL FastAPI
 

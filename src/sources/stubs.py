@@ -33,21 +33,6 @@ class _StubAdapterBase:
         await stop.wait()
 
 
-class QrGeoStubAdapter(_StubAdapterBase):
-    """
-    Заглушка qr-geo.
-
-    Будущий вход: SSE QR-reader-API ``GET /api/qr-reader/v1/events``,
-    event ``qr-detected``, поле ``result`` — ключ geo-lookup вне QR-reader.
-    Пока не подключается к сети и не публикует точки.
-    """
-
-    name = "qr-geo"
-    _not_implemented_msg = (
-        "SSE QR-reader + coordinate lookup reserved for a future service"
-    )
-
-
 class ImuStubAdapter(_StubAdapterBase):
     """Заглушка расчёта координат по акселерометру / IMU."""
 

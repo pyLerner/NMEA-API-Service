@@ -8,7 +8,7 @@
 - Запросы с телом: заголовок `Content-Type: application/json`.
 - Ответы: JSON в кодировке UTF-8.
 - Ключи JSON в успешных ответах данных: **kebab-case** (например `record-id`, `lat-hemisphere`, `satellites-count`).
-- **Авторизация:** пути `/api/ping` и `/api/navigator/v1/*`, `/api/navigator/v2/*` **не** требуют `Authorization`. Legacy (`/LastCoords`, …) требуют Bearer.
+- **Авторизация:** пути `/api/ping` и `/api/navigator/v1/*`, `/api/navigator/v2/*` **не** требуют `Authorization`. Legacy (`/LastCoords`, …) и `/api/qr-geo/v1/*` требуют Bearer (`Authorization: Bearer <token>`). Токен: env `NAVAPI_API_TOKEN`, иначе `[API].Token`.
 
 Набор эндпоинтов:
 
@@ -18,6 +18,8 @@
 - `DELETE /api/navigator/v1/delete-record/{record_id}`
 - `GET /api/navigator/v2/last-coords` (SSE)
 - `GET /api/navigator/v2/all-coords`
+- `POST /api/qr-geo/v1/catalog:replace` (Bearer)
+- `POST /api/qr-geo/v1/catalog:append` (Bearer)
 
 **Не входят в контракт:** служебные URL FastAPI (`/docs`, `/openapi.json`, `/redoc` и т.п.) — на них действует Bearer, как на legacy.
 
@@ -58,7 +60,7 @@
 | `nmea/rmc` | `nmea` | Принятое GNRMC |
 | `nmea/ecef` | `nmea` | ECEFPOSVEL |
 | `nmea/fusion` | `nmea` | Predict / coast fusion |
-| `qr` | `qr` | QR→координаты (будущий провайдер) |
+| `qr` | `qr` | QR→координаты (справочник + SSE QR-reader) |
 | `imu` | `imu` | Акселерометр / IMU (будущий) |
 | `triangulation` | `triangulation` | Триангуляция оператора (будущий) |
 
@@ -83,7 +85,7 @@
 | Секция | Type | Поля |
 |--------|------|------|
 | `[Sources.nmea]` | `serial-nmea` | `HardwarePort`, `Baud` (+ `[System].Input` / `Stdin`) |
-| `[Sources.qr-geo]` | `qr-geo` | stub |
+| `[Sources.qr-geo]` | `qr-geo` | `EventsUrl`, `GeoDbPath`, `ConnectTimeoutMs`, `ReconnectMinMs`, `ReconnectMaxMs`, `DedupWindowSec` |
 | `[Sources.imu]` | `imu` | stub |
 | `[Sources.triangulation]` | `triangulation-http` | stub: `Url`, `IntervalMs`, `TimeoutMs` |
 
@@ -191,15 +193,44 @@ curl -s "http://127.0.0.1:7000/api/navigator/v2/all-coords?provider=nmea&from=20
 
 Ответ: `{ "result": true, "count": N, "data": [ ... ] }` (kebab-case).
 
-## 6. Коды ответа
+## 6. Справочник QR (`/api/qr-geo/v1/`)
+
+Управление отдельной SQLite БД (`GeoDbPath`, по умолчанию `data/qr_geo.db`). Требуется Bearer (тот же токен, что для legacy).
+
+| Метод | Путь | Поведение |
+|-------|------|-----------|
+| `POST` | `/api/qr-geo/v1/catalog:replace` | Полная перезапись каталога |
+| `POST` | `/api/qr-geo/v1/catalog:append` | Upsert по `qr-value` |
+
+Тело: `multipart/form-data` с полем `file` (`.csv` / `.json`) или `application/json` (массив либо `{"entries":[…]}`).
+
+Обязательные поля записи: `qr-value`, `latitude`, `longitude`. Опционально: `lat-hemisphere` (только `N`, default `N`), `lon-hemisphere` (только `E`, default `E`), `label`, `enabled`.
+
+Нормализация координат: trim, снятие кавычек, десятичная `,` → `.` если нет `.`. Отрицательные lat/lon → ошибка (сервис только N/E). Пустой файл на **replace** → `422`. При любой ошибке валидации БД не меняется.
+
+Успех: `{ "result": true, "count": N, "format": "csv"|"json", "mode": "replace"|"append" }`.
+
+```bash
+curl -sS -X POST \
+  -H "Authorization: Bearer $NAVAPI_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '[{"qr-value":"STOP-1","latitude":"46,05123","longitude":14.5}]' \
+  "http://127.0.0.1:7000/api/qr-geo/v1/catalog:replace"
+```
+
+Провайдер `[Sources.qr-geo]` (при `Enabled=true`) читает SSE QR-reader (`EventsUrl`), ищет `result` в справочнике и публикует точку с `source=qr`. Справочник можно заливать при `Enabled=false`.
+
+## 7. Коды ответа
 
 - `200 OK` — успех (включая «не найдено» для delete).
-- `400 Bad Request` — невалидные `from`/`to`.
-- `422 Unprocessable Entity` — неверные параметры (например `limit`).
+- `400 Bad Request` — невалидные `from`/`to` или тело каталога.
+- `401 Unauthorized` — legacy / qr-geo без валидного Bearer.
+- `413` / `415` — слишком большой файл / неверный формат каталога.
+- `422 Unprocessable Entity` — неверные параметры или валидация каталога.
 - `500 Internal Server Error` — внутренняя ошибка.
-- `401 Unauthorized` — legacy без валидного Bearer.
+- `503` — qr-geo store не инициализирован.
 
-## 7. Версионирование
+## 8. Версионирование
 
 Изменения, ломающие совместимость полей или путей, оформляются новой версией протокола.
 

@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.3-qr-geo
+
+Провайдер `qr` и управление справочником координат.
+
+### QrGeo
+
+- Отдельный SQLite `qr_geo` (`GeoDbPath`), RAM `QrGeoLookup`.
+- `POST /api/qr-geo/v1/catalog:replace` и `catalog:append` (CSV/JSON, Bearer).
+- `QrGeoAdapter`: SSE QR-reader → lookup → `PositionHub` с `source=qr`.
+- Токен: `NAVAPI_API_TOKEN` (compose `.env`), fallback `[API].Token`.
+
+### Документация
+
+- [doc/API-PROTOCOL-v2.md](doc/API-PROTOCOL-v2.md) §6; [plan/04_QR-GEO-PROVIDER.md](plan/04_QR-GEO-PROVIDER.md).
+
 ## v2.2-multi-source-hub
 
 Каркас нескольких источников навигации и API `/api/navigator/v2/`.
@@ -9,8 +24,8 @@
 - Пакет [`src/sources/`](src/sources/): `PositionHub`, `NavPositionEvent`, Protocol адаптера, factory.
 - Общий поток (interleave): все включённые провайдеры пишут в один `RecordsCache`.
 - NMEA вынесен в `NmeaSerialAdapter` (reader + fusion tick → Hub).
-- Stubs (без публикации координат): `qr-geo`, `imu`, `triangulation-http` — при `Enabled=true` только warning «not implemented».
-- Составное поле `source` на всех API: `nmea/rmc`, `nmea/ecef`, `nmea/fusion`, а также `qr` / `imu` / `triangulation` (зарезервировано).
+- Stubs (без публикации координат): `imu`, `triangulation-http` — при `Enabled=true` только warning «not implemented». Провайдер `qr-geo` реализован отдельно (см. v2.3).
+- Составное поле `source` на всех API: `nmea/rmc`, `nmea/ecef`, `nmea/fusion`, а также `qr` / `imu` / `triangulation`.
 
 ### Конфигурация
 

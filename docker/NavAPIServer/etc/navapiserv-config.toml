@@ -11,6 +11,12 @@ Baud = 19200
 [Sources.qr-geo]
 Enabled = false
 Type = "qr-geo"
+EventsUrl = "http://127.0.0.1:8000/api/qr-reader/v1/events"
+GeoDbPath = "/db/qr_geo.db"
+ConnectTimeoutMs = 5000
+ReconnectMinMs = 500
+ReconnectMaxMs = 30000
+DedupWindowSec = 5
 
 [Sources.imu]
 Enabled = false
@@ -24,7 +30,8 @@ Type = "triangulation-http"
 Host = "0.0.0.0"
 HTTP_Port = 7100
 Workers = 5
-Token = "A0473A67-27A1-3C05-A2D1-5C134639347F"
+# Prefer NAVAPI_API_TOKEN from compose env_file .env
+Token = ""
 SseKeepaliveSec = 15
 
 [System]

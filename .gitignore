@@ -9,6 +9,10 @@ wheels/
 # Virtual environments
 .venv
 
+# Secrets
+.env
+docker/.env
+
 # Logs
 logs/
 Build-NaviTerminal.dist/

@@ -1,5 +1,6 @@
 # Dev compose: local build and bind-mounts for development on target board.
 # Production deploy uses docker/docker/docker-compose.yml and build-off-board.sh bundle.
+# Token: copy .env.example → .env and set NAVAPI_API_TOKEN (do not commit .env).
 
 services:
   navterminal:
@@ -10,6 +11,10 @@ services:
       network: host
     container_name: navterminal-dev
     restart: always
+    env_file:
+      - .env
+    environment:
+      NAVAPI_API_TOKEN: ${NAVAPI_API_TOKEN}
     tmpfs:
       - /tmp:exec,size=1G,mode=1777
     network_mode: host
