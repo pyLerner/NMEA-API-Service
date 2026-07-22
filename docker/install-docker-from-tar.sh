@@ -17,6 +17,9 @@ Usage: install-docker-from-tar.sh [options] [DEPLOY_DIR]
 
 Options:
   --copy-to-opt       Скопировать navigator в /opt/navigator (нужен root).
+                      Существующие /opt/navigator/.env и /opt/navigator/db/
+                      не удаляются (rsync --exclude). Если их ещё нет — скрипт
+                      не падает; .env нужно создать вручную перед первым up.
   --no-up             Только docker load (и опционально --copy-to-opt), без запуска.
   --tar FILE          Явный путь к .tar.gz; иначе ищется navigator*.tar.gz в DEPLOY_DIR.
   -h, --help          Справка.
@@ -98,8 +101,25 @@ copy_project_to_opt() {
   need_cmd rsync
   log "Копирование ${src} → ${OPT_TARGET} …"
   mkdir -p "${OPT_TARGET}"
-  rsync -a --delete "${src}/" "${OPT_TARGET}/"
+
+  # --delete зеркалит bundle, но не трогает локальные секреты и данные SQLite.
+  # Отсутствие .env или db/ на источнике/назначении не ошибка.
+  rsync -a --delete \
+    --exclude='.env' \
+    --exclude='db/' \
+    --exclude='db' \
+    "${src}/" "${OPT_TARGET}/"
+
   mkdir -p "${OPT_TARGET}/etc" "${OPT_TARGET}/db" "${OPT_TARGET}/log"
+
+  if [[ -f "${OPT_TARGET}/.env" ]]; then
+    log "Сохранён существующий ${OPT_TARGET}/.env"
+  else
+    warn "нет ${OPT_TARGET}/.env — создайте его (NAVAPI_API_TOKEN=…) перед compose up; пример: .env.example в bundle/репозитории"
+  fi
+  if [[ -d "${OPT_TARGET}/db" ]]; then
+    log "Каталог данных ${OPT_TARGET}/db сохранён/создан"
+  fi
 }
 
 resolve_compose_rel_path() {

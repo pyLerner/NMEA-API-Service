@@ -402,7 +402,7 @@ curl -sS "$BASE/api/navigator/v2/all-coords" | head -c 2000
 ## 8. Регрессия после обновления
 
 1. Собрать новый bin + bundle (шаги 2–3A) или `compose ... --build` (3B).
-2. Сохранить `/opt/navigator/db/` и `/opt/navigator/.env` (не затирать без нужды).
+2. Сохранить `/opt/navigator/db/` и `/opt/navigator/.env` не требуется вручную при обновлении через `install-docker-from-tar.sh --copy-to-opt` — скрипт исключает их из `rsync --delete`.
 3. Обновить образ/бинарник, `compose up -d --force-recreate --no-build`.
 4. Повторить §6; при стенде — §7.
 5. Ротация токена: новый `NAVAPI_API_TOKEN` в `.env` → recreate → обновить клиенты/скрипты заливки.
