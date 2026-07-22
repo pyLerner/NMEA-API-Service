@@ -27,8 +27,9 @@ Baud = 19200
 [Sources.qr-geo]
 Enabled = false
 Type = "qr-geo"
-EventsUrl = "http://127.0.0.1:8000/api/qr-reader/v1/events"
+EventsUrl = "http://127.0.0.1:7140/api/qr-reader/v1/events"
 GeoDbPath = "/db/qr_geo.db"
+EventTimeSource = "event"
 ConnectTimeoutMs = 5000
 ReconnectMinMs = 500
 ReconnectMaxMs = 30000

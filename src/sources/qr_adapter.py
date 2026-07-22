@@ -14,9 +14,12 @@ import httpx
 from qr_geo.config import (
     DEFAULT_CONNECT_TIMEOUT_MS,
     DEFAULT_DEDUP_WINDOW_SEC,
+    DEFAULT_EVENT_TIME_SOURCE,
     DEFAULT_EVENTS_URL,
     DEFAULT_RECONNECT_MAX_MS,
     DEFAULT_RECONNECT_MIN_MS,
+    EVENT_TIME_SOURCE_LOAD_IMAGE,
+    normalize_event_time_source,
     qr_geo_param,
 )
 from qr_geo.lookup import QrGeoLookup
@@ -41,6 +44,7 @@ class QrGeoAdapter:
         reconnect_min_ms: int = DEFAULT_RECONNECT_MIN_MS,
         reconnect_max_ms: int = DEFAULT_RECONNECT_MAX_MS,
         dedup_window_sec: float = DEFAULT_DEDUP_WINDOW_SEC,
+        event_time_source: str = DEFAULT_EVENT_TIME_SOURCE,
         **_params: object,
     ) -> None:
         self._hub = hub
@@ -51,6 +55,7 @@ class QrGeoAdapter:
         self._reconnect_min = max(0.05, reconnect_min_ms / 1000.0)
         self._reconnect_max = max(self._reconnect_min, reconnect_max_ms / 1000.0)
         self._dedup_window = max(0.0, float(dedup_window_sec))
+        self._event_time_source = normalize_event_time_source(event_time_source)
         self._last_emit: dict[str, float] = {}
 
     @classmethod
@@ -100,7 +105,25 @@ class QrGeoAdapter:
                     default=DEFAULT_DEDUP_WINDOW_SEC,
                 )
             ),
+            event_time_source=str(
+                qr_geo_param(
+                    params,
+                    "EventTimeSource",
+                    "event_time_source",
+                    default=DEFAULT_EVENT_TIME_SOURCE,
+                )
+            ),
         )
+
+    def _pick_event_time(self, payload: dict[str, Any]) -> str | None:
+        load_t = payload.get("load-image-time") or payload.get("load_image_time")
+        event_t = payload.get("timestamp")
+        if self._event_time_source == EVENT_TIME_SOURCE_LOAD_IMAGE:
+            chosen = load_t or event_t
+        else:
+            # event — время публикации/обработки SSE
+            chosen = event_t or load_t
+        return str(chosen) if chosen else None
 
     def _dedup_ok(self, qr_value: str) -> bool:
         if self._dedup_window <= 0:
@@ -128,14 +151,12 @@ class QrGeoAdapter:
             self._logger.debug("qr dedup skip result=%s", result)
             return
 
-        dt = payload.get("load-image-time") or payload.get("load_image_time")
-        if not dt:
-            dt = payload.get("timestamp")
+        dt = self._pick_event_time(payload)
 
         event = NavPositionEvent(
             provider=PROVIDER_QR,
             source=SOURCE_QR,
-            datetime_iso=str(dt) if dt else None,
+            datetime_iso=dt,
             latitude=point.latitude,
             latitude_hemi=point.lat_hemi,
             longitude=point.longitude,

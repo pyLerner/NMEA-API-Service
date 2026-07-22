@@ -37,7 +37,7 @@ flowchart TB
 Файлы: `src/models/data_models.py`, `etc/gnrmc-provider.toml`, docker-конфиги.
 
 - Резолв токена: **`NAVAPI_API_TOKEN` → `API.Token`** (без TokenFile).
-- `[Sources.qr-geo]`: `EventsUrl`, `GeoDbPath`, `ConnectTimeoutMs`, `ReconnectMinMs`/`ReconnectMaxMs`, `DedupWindowSec` (по умолчанию 5).
+- `[Sources.qr-geo]`: `EventsUrl` (порт **7140**), `GeoDbPath`, `EventTimeSource` (`load-image`\|`event`, default `event`), `ConnectTimeoutMs`, `ReconnectMinMs`/`ReconnectMaxMs`, `DedupWindowSec` (по умолчанию 5).
 - Убрать plaintext боевых токенов из примеров в git → пусто/placeholder; описать `.env`.
 - В `src/api_server.py`: не логировать значение токена при `401`; пути `/api/qr-geo/` требуют Bearer (как legacy).
 

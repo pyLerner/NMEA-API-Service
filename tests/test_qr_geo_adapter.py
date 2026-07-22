@@ -49,6 +49,7 @@ async def test_adapter_publishes_on_hit(hub_lookup) -> None:
             "result": "KNOWN",
             "image-id": "img-1",
             "load-image-time": "2026-07-22T10:00:00+00:00",
+            "timestamp": "2026-07-22T10:00:02+00:00",
         }
     )
     snap = await cache.snapshot()
@@ -57,6 +58,50 @@ async def test_adapter_publishes_on_hit(hub_lookup) -> None:
     assert snap[0].latitude == 46.1
     assert snap[0].quality == "GOOD"
     assert snap[0].mode == "M"
+    # default EventTimeSource=event → timestamp
+    assert snap[0].datetime == "2026-07-22T10:00:02+00:00"
+
+
+@pytest.mark.asyncio
+async def test_event_time_source_load_image(hub_lookup) -> None:
+    hub, lookup, cache = hub_lookup
+    adapter = QrGeoAdapter(
+        hub,
+        lookup,
+        _logger(),
+        dedup_window_sec=0,
+        event_time_source="load-image",
+    )
+    await adapter._handle_payload(
+        {
+            "result": "KNOWN",
+            "load-image-time": "2026-07-22T10:00:00+00:00",
+            "timestamp": "2026-07-22T10:00:02+00:00",
+        }
+    )
+    snap = await cache.snapshot()
+    assert snap[0].datetime == "2026-07-22T10:00:00+00:00"
+
+
+@pytest.mark.asyncio
+async def test_event_time_source_event(hub_lookup) -> None:
+    hub, lookup, cache = hub_lookup
+    adapter = QrGeoAdapter(
+        hub,
+        lookup,
+        _logger(),
+        dedup_window_sec=0,
+        event_time_source="event",
+    )
+    await adapter._handle_payload(
+        {
+            "result": "KNOWN",
+            "load-image-time": "2026-07-22T10:00:00+00:00",
+            "timestamp": "2026-07-22T10:00:02+00:00",
+        }
+    )
+    snap = await cache.snapshot()
+    assert snap[0].datetime == "2026-07-22T10:00:02+00:00"
 
 
 @pytest.mark.asyncio

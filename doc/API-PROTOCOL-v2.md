@@ -85,7 +85,7 @@
 | Секция | Type | Поля |
 |--------|------|------|
 | `[Sources.nmea]` | `serial-nmea` | `HardwarePort`, `Baud` (+ `[System].Input` / `Stdin`) |
-| `[Sources.qr-geo]` | `qr-geo` | `EventsUrl`, `GeoDbPath`, `ConnectTimeoutMs`, `ReconnectMinMs`, `ReconnectMaxMs`, `DedupWindowSec` |
+| `[Sources.qr-geo]` | `qr-geo` | `EventsUrl`, `GeoDbPath`, `EventTimeSource`, `ConnectTimeoutMs`, `ReconnectMinMs`, `ReconnectMaxMs`, `DedupWindowSec` |
 | `[Sources.imu]` | `imu` | stub |
 | `[Sources.triangulation]` | `triangulation-http` | stub: `Url`, `IntervalMs`, `TimeoutMs` |
 
@@ -218,7 +218,14 @@ curl -sS -X POST \
   "http://127.0.0.1:7000/api/qr-geo/v1/catalog:replace"
 ```
 
-Провайдер `[Sources.qr-geo]` (при `Enabled=true`) читает SSE QR-reader (`EventsUrl`), ищет `result` в справочнике и публикует точку с `source=qr`. Справочник можно заливать при `Enabled=false`.
+Провайдер `[Sources.qr-geo]` (при `Enabled=true`) читает SSE QR-reader (`EventsUrl`, порт по умолчанию **7140**), ищет `result` в справочнике и публикует точку с `source=qr`. Справочник можно заливать при `Enabled=false`.
+
+**`EventTimeSource`** (`load-image` \| `event`, по умолчанию `event`) — какое время из SSE `qr-detected` писать в поле `time` geo-записи:
+
+| Значение | Поле SSE | Когда использовать |
+|----------|----------|-------------------|
+| `load-image` | `load-image-time` | Нужна привязка к моменту приёма кадра. При лаге пайплайна QR может попасть в Hub позже NMEA, но с более ранним `time` — хронология между провайдерами ломается. |
+| `event` | `timestamp` | Время обработки/публикации события. Согласуется с порядком появления точек рядом с `nmea`; рекомендуется при совместной работе с GNSS. |
 
 ## 7. Коды ответа
 

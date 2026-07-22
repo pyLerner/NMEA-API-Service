@@ -98,8 +98,9 @@ uv sync --group dev
   - `Token` — Bearer-токен (fallback для local/pytest); в Docker задавайте **`NAVAPI_API_TOKEN`** через `.env`.
   - `SseKeepaliveSec` — интервал SSE ping.
 - `[Sources.qr-geo]` — провайдер QR (можно `Enabled=false`, справочник всё равно доступен через API):
-  - `EventsUrl` — SSE QR-reader (`…/api/qr-reader/v1/events`);
+  - `EventsUrl` — SSE QR-reader (`…/api/qr-reader/v1/events`, порт по умолчанию **7140**);
   - `GeoDbPath` — отдельный SQLite справочника;
+  - `EventTimeSource` — `load-image` \| `event` (default `event`): время в `record.time` из SSE (`load-image-time` vs `timestamp`); для хронологии с NMEA предпочтителен `event`;
   - `DedupWindowSec`, `ConnectTimeoutMs`, `ReconnectMinMs` / `ReconnectMaxMs`.
 - `[System]`
   - `ProgramDirectory` — служебный каталог приложения;

@@ -10,7 +10,18 @@
 #
 # [Sources.<name>] — провайдеры навигации (Enabled / Type + свои поля)
 #   [Sources.nmea] — serial/file/stdin NMEA (HardwarePort, Baud).
-#   [Sources.qr-geo] — SSE QR-reader + geo-lookup (EventsUrl, GeoDbPath, …).
+#   [Sources.qr-geo] — SSE QR-reader + geo-lookup:
+#     EventsUrl — GET …/api/qr-reader/v1/events (по умолчанию порт 7140).
+#     GeoDbPath — SQLite справочника QR→координаты.
+#     EventTimeSource — какое время из SSE qr-detected писать в record.time (geo data):
+#       load-image — load-image-time (момент приёма/загрузки кадра). Ближе к съёмке,
+#         но при задержке детекции точка может попасть в Hub позже NMEA, имея более
+#         ранний time — нарушается хронология last/all-coords между провайдерами.
+#       event — timestamp события (момент обработки/публикации SSE после детекции).
+#         Согласуется с порядком появления точек в Hub рядом с nmea; рекомендуется
+#         при совместной работе с GNSS. Значение по умолчанию: event.
+#     ConnectTimeoutMs / ReconnectMinMs / ReconnectMaxMs — SSE-клиент.
+#     DedupWindowSec — локальный антидребезг одного qr-value.
 #   [Sources.imu] — заглушка акселерометра / IMU.
 #   [Sources.triangulation] — заглушка HTTP-клиента триангуляции оператора.
 #   Legacy: если [Sources.nmea] нет, а есть [Hardware] — смапится в nmea.
@@ -70,8 +81,10 @@ Baud = 9600
 [Sources.qr-geo]
 Enabled = false
 Type = "qr-geo"
-EventsUrl = "http://127.0.0.1:8000/api/qr-reader/v1/events"
+EventsUrl = "http://127.0.0.1:7140/api/qr-reader/v1/events"
 GeoDbPath = "data/qr_geo.db"
+# load-image | event (default event) — см. шапку конфига
+EventTimeSource = "event"
 ConnectTimeoutMs = 5000
 ReconnectMinMs = 500
 ReconnectMaxMs = 30000
