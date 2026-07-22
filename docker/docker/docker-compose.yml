@@ -1,6 +1,6 @@
 services:
   navigator:
-    image: navigator:2-kalman-ecef
+    image: navigator:5-multisource-qr-nmea
     pull_policy: never
     container_name: navigator
     restart: unless-stopped
@@ -20,6 +20,7 @@ services:
       - /opt/navigator/etc:/etc/navigator:ro
       - /opt/navigator/db:/db:rw
       - /opt/navigator/log:/log:rw
+      - /opt/navigator/.terminal-id:/.terminal-id:ro
       - /etc/localtime:/etc/localtime:ro
     stop_signal: SIGTERM
     stop_grace_period: 10s

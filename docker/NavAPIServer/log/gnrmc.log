@@ -1,0 +1,11 @@
+2026-06-19 14:40:27 [INFO] === GNRMC Unified App starting ===
+2026-06-19 14:40:27 [INFO] Config: ../etc/gnrmc-provider.toml | DB=data/gnrmc.db | MaxRows=150000 | Host=0.0.0.0:7000 | Workers=5 | CacheLen=5000 | CacheTrigger=100
+2026-06-19 14:40:27 [INFO] DB initialized at data/gnrmc.db
+2026-06-19 14:40:28 [INFO] Reading NMEA from serial: /dev/ttyS3 (baud=9600)
+2026-06-19 14:40:29 [INFO] Cached datetime=2026-06-19T11:40:29+00:00 valid=A lat=60.015090N lon=30.284576E speed=5.61156 dir=193.33 sat=6 source=nmea
+2026-06-19 14:40:30 [INFO] Cached datetime=2026-06-19T11:40:30+00:00 valid=A lat=60.015076N lon=30.284570E speed=5.96344 dir=197.25 sat=6 source=nmea
+2026-06-19 14:40:31 [INFO] Cached datetime=2026-06-19T11:40:31+00:00 valid=A lat=60.015061N lon=30.284561E speed=6.0004800000000005 dir=197.29 sat=6 source=nmea
+2026-06-19 14:40:32 [INFO] Received signal 2, shutting down...
+2026-06-19 14:40:32 [INFO] NMEA reader task cancelled
+2026-06-19 14:40:32 [INFO] DB flusher task cancelled
+2026-06-19 14:40:32 [INFO] === GNRMC Unified App stopped ===

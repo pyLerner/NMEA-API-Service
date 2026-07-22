@@ -8,9 +8,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOCKER_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-IMAGE_TAG="${IMAGE_TAG:-navigator:2-kalman-ecef}"
-EXPORT_TAR_DEFAULT="${DOCKER_DIR}/navigator-2-kalman-ecef-$(date +%Y%m%d).tar.gz"
-BUNDLE_DIR_NAME="${BUNDLE_DIR_NAME:-NavigatorDockerApp-KF-ECEF}"
+IMAGE_TAG="${IMAGE_TAG:-navigator:5-multisource-qr-nmea}"
+EXPORT_TAR_DEFAULT="${DOCKER_DIR}/navigator:5-multisource-qr-nmea-$(date +%Y%m%d).tar.gz"
+BUNDLE_DIR_NAME="${BUNDLE_DIR_NAME:-NavigatorDockerApp-MULTISOURCE-QR-NMEA}"
 BUNDLE_TAR_DEFAULT="${DOCKER_DIR}/${BUNDLE_DIR_NAME}-$(date +%Y%m%d).tar.gz"
 BUILDER_NAME="${BUILDER_NAME:-navigator-builder}"
 PROJECT_DIR_NAME="${PROJECT_DIR_NAME:-navigator}"

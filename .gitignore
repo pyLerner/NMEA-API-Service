@@ -22,3 +22,4 @@ Buid-NaviTerninal.dist/
 NavigatorDockerApp/
 docker/navigator-*.tar.gz
 docker/NavigatorDockerApp-*.tar.gz
+**/*.tar.gz*

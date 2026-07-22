@@ -108,6 +108,7 @@ copy_project_to_opt() {
     --exclude='.env' \
     --exclude='db/' \
     --exclude='db' \
+    --exclude='.terminal-id' \
     "${src}/" "${OPT_TARGET}/"
 
   mkdir -p "${OPT_TARGET}/etc" "${OPT_TARGET}/db" "${OPT_TARGET}/log"

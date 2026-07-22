@@ -4,7 +4,7 @@
 
 services:
   navterminal:
-    image: navigator:2-kalman-ecef
+    image: navigator:5-multisource-nmea-qr
     build:
       context: .
       dockerfile: docker/Dockerfile

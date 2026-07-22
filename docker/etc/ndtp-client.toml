@@ -4,15 +4,16 @@ Port = 7100
 Token = "A0473A67-27A1-3C05-A2D1-5C134639347F"
 
 [NDTP]
-Host = "31.172.134.100"
-Port = 5401
+Host = "195.122.228.34"
+Port = 4876
 
 [System]
 LogDir = "/log/ndtp-client.log"
 Timeout = 10
-PeerAddr = 706720001
+PeerAddrFile = "/.terminal-id"
 Regular = true
-Interval = 30
+Disconnect = true
+Interval = 15
 ServerPort = 4050
 
 [History]
@@ -25,3 +26,8 @@ LogDir = "/log/ndtp-message.log"
 APIAddr = "localhost"
 APIPort = 7200
 APIEndpoint = "/api/message-relay/inbound-server-message"
+
+[Alarm]
+AlarmAddr = "localhost"
+AlarmPort = 7130
+
