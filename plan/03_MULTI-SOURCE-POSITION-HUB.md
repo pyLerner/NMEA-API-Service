@@ -5,7 +5,7 @@
 - **Одно поле `source`** с составными значениями: семейство NMEA — `nmea/rmc`, `nmea/ecef`, `nmea/fusion`; внешние — `qr`, `imu`, `triangulation` (без `/`, либо позже `qr/...` при необходимости).
 - **Общий поток = interleave**: все включённые провайдеры пишут в один `RecordsCache`; «последняя» точка — новейшая среди всех (с опциональным фильтром).
 - Query-параметр фильтра называется **`provider`**: это идентификатор семейства (= сегмент `source` до `/`, либо весь `source`, если слэша нет). Примеры: `provider=nmea` матчит `nmea/rmc|ecef|fusion`; `provider=qr` матчит `qr`.
-- **QR→coords** сейчас только слот в конфиге + stub-адаптер; транспорт/lookup — при отдельной реализации.
+- **QR→coords** реализован отдельно: см. [04_QR-GEO-PROVIDER.md](04_QR-GEO-PROVIDER.md) (`QrGeoStore` / `QrGeoLookup` / `QrGeoAdapter`).
 - **Совместимость:** пути legacy и `/api/navigator/v1/` сохраняем; в `source` на всех версиях API — **новый составной формат** (без маппинга в старый enum). Новый контракт эндпоинтов — пути **`/api/navigator/v2/`**.
 - **v2 API (новый):**
   1. **SSE** `GET /api/navigator/v2/last-coords?provider=` — поток обновлений последней точки (фильтр опционален).
@@ -211,9 +211,10 @@ data: {"result":true,"record":{"record-id":0,"time":"...","latitude":...,"source
 
 ## Вне scope (явно)
 
-- Реализация QR→coords / подключение к QR-reader.
 - Реальный IMU и API сотового оператора.
 - Multi-source fusion / primary-fallback.
 - Message bus (NATS/Redis).
 - Обратный маппинг `source` в старый enum для v1/legacy.
 - Смена путей/полей legacy и `/api/navigator/v1/` (кроме значения `source`).
+
+> QR→coords: см. [04_QR-GEO-PROVIDER.md](04_QR-GEO-PROVIDER.md).

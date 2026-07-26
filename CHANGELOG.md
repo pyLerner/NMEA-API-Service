@@ -1,5 +1,11 @@
 # Changelog
 
+## Deploy: `.terminal-id` и `.env` при `--copy-to-opt`
+
+- `install-docker-from-tar.sh`: после rsync в `/opt/navigator` — интерактивный `terminal-id` (default из существующего файла); для отсутствующего/пустого `.env` — предложение создать из `.env.example` (`chmod 600`).
+- `rsync --exclude`: `.env`, `.terminal-id`, `db/` не затираются.
+- [docker/README-deploy.md](docker/README-deploy.md) обновлён.
+
 ## v2.3-qr-geo
 
 Провайдер `qr` и управление справочником координат.

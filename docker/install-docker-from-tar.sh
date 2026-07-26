@@ -17,9 +17,9 @@ Usage: install-docker-from-tar.sh [options] [DEPLOY_DIR]
 
 Options:
   --copy-to-opt       Скопировать navigator в /opt/navigator (нужен root).
-                      Существующие /opt/navigator/.env и /opt/navigator/db/
-                      не удаляются (rsync --exclude). Если их ещё нет — скрипт
-                      не падает; .env нужно создать вручную перед первым up.
+                      Не затираются: .env, .terminal-id, db/ (rsync --exclude).
+                      После копирования: интерактивно terminal-id; при отсутствии
+                      .env — предложить создать из .env.example (chmod 600).
   --no-up             Только docker load (и опционально --copy-to-opt), без запуска.
   --tar FILE          Явный путь к .tar.gz; иначе ищется navigator*.tar.gz в DEPLOY_DIR.
   -h, --help          Справка.
@@ -95,6 +95,104 @@ compose_down_project() {
   ( cd "$root" && docker compose -f "$COMPOSE_REL_PATH" down --remove-orphans 2>/dev/null ) || true
 }
 
+# Trim leading/trailing whitespace and CR/LF.
+_trim() {
+  local s="$1"
+  s="${s#"${s%%[![:space:]]*}"}"
+  s="${s%"${s##*[![:space:]]}"}"
+  s="${s//$'\r'/}"
+  printf '%s' "$s"
+}
+
+_file_has_content() {
+  local f=$1
+  [[ -f "$f" && -s "$f" ]] || return 1
+  local t
+  t=$(_trim "$(cat "$f")")
+  [[ -n "$t" ]]
+}
+
+# Read a line from the controlling terminal (works under sudo).
+_read_tty() {
+  local prompt=$1
+  local __var=$2
+  local line=""
+  if [[ -r /dev/tty ]]; then
+    printf '%s' "$prompt" >/dev/tty
+    IFS= read -r line </dev/tty || true
+  else
+    printf '%s' "$prompt" >&2
+    IFS= read -r line || true
+  fi
+  printf -v "$__var" '%s' "$line"
+}
+
+ensure_terminal_id() {
+  local path="${OPT_TARGET}/.terminal-id"
+  local current="" input=""
+
+  if _file_has_content "$path"; then
+    current=$(_trim "$(cat "$path")")
+    log "Найден ${path}."
+    _read_tty "terminal-id [${current}]: " input
+    input=$(_trim "$input")
+    if [[ -z "$input" ]]; then
+      input=$current
+      log "Оставлен terminal-id по умолчанию."
+    fi
+  else
+    log "Значение terminal-id не установлено — необходимо ввести."
+    while true; do
+      _read_tty "terminal-id: " input
+      input=$(_trim "$input")
+      if [[ -n "$input" ]]; then
+        break
+      fi
+      warn "пустое значение недопустимо, повторите ввод"
+    done
+  fi
+
+  printf '%s\n' "$input" >"$path"
+  chmod 644 "$path" || true
+  log "Записан ${path}"
+}
+
+ensure_env_file() {
+  local path="${OPT_TARGET}/.env"
+  local example="${OPT_TARGET}/.env.example"
+  local ans=""
+
+  if _file_has_content "$path"; then
+    log "Найден ${path} (содержимое не выводится)."
+    return 0
+  fi
+
+  log "${path} отсутствует или пуст."
+  if [[ ! -f "$example" ]]; then
+    warn "нет ${example} в bundle — создайте ${path} вручную (NAVAPI_API_TOKEN=…) перед compose up"
+    return 0
+  fi
+
+  _read_tty "Создать ${path} из .env.example? [Y/n]: " ans
+  ans=$(_trim "${ans:-Y}")
+  case "$ans" in
+    "" | y | Y | yes | YES)
+      cp "$example" "$path"
+      chmod 600 "$path"
+      # Владелец как у каталога /opt/navigator (обычно root при --copy-to-opt).
+      if [[ -d "${OPT_TARGET}" ]]; then
+        chown --reference="${OPT_TARGET}" "$path" 2>/dev/null \
+          || chown "$(stat -c '%u:%g' "${OPT_TARGET}" 2>/dev/null || echo root:root)" "$path" 2>/dev/null \
+          || true
+      fi
+      log "Создан ${path} (режим 600). Задайте NAVAPI_API_TOKEN перед использованием API."
+      ;;
+    *)
+      warn "создание ${path} пропущено — создайте файл вручную перед compose up"
+      ;;
+  esac
+}
+
 copy_project_to_opt() {
   local src="$1"
   [[ -d "$src" ]] || die "нет каталога: $src"
@@ -102,8 +200,7 @@ copy_project_to_opt() {
   log "Копирование ${src} → ${OPT_TARGET} …"
   mkdir -p "${OPT_TARGET}"
 
-  # --delete зеркалит bundle, но не трогает локальные секреты и данные SQLite.
-  # Отсутствие .env или db/ на источнике/назначении не ошибка.
+  # --delete зеркалит bundle, но не трогает локальные секреты, terminal-id и данные SQLite.
   rsync -a --delete \
     --exclude='.env' \
     --exclude='db/' \
@@ -113,11 +210,9 @@ copy_project_to_opt() {
 
   mkdir -p "${OPT_TARGET}/etc" "${OPT_TARGET}/db" "${OPT_TARGET}/log"
 
-  if [[ -f "${OPT_TARGET}/.env" ]]; then
-    log "Сохранён существующий ${OPT_TARGET}/.env"
-  else
-    warn "нет ${OPT_TARGET}/.env — создайте его (NAVAPI_API_TOKEN=…) перед compose up; пример: .env.example в bundle/репозитории"
-  fi
+  ensure_terminal_id
+  ensure_env_file
+
   if [[ -d "${OPT_TARGET}/db" ]]; then
     log "Каталог данных ${OPT_TARGET}/db сохранён/создан"
   fi
