@@ -31,3 +31,7 @@ APIEndpoint = "/api/message-relay/inbound-server-message"
 AlarmAddr = "localhost"
 AlarmPort = 7130
 
+[GeoSSE]
+GeoAddr = "localhost"
+GeoPort = 7100
+GeoEndpoint = "/api/navigator/v2/last-coords"

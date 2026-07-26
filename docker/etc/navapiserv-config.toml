@@ -62,7 +62,7 @@ LogName = "gnrmc.log"
 LogLevel = "INFO"
 MaxLogs = 5
 MaxSize = "5m"
-LogRowNMEA = "no"
+LogRowNMEA = "yes"
 RowNMEA = "nmea-row.log"
 
 [Memory]

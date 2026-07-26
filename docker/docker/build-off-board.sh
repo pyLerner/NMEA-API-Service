@@ -8,8 +8,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOCKER_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-IMAGE_TAG="${IMAGE_TAG:-navigator:5-multisource-qr-nmea}"
-EXPORT_TAR_DEFAULT="${DOCKER_DIR}/navigator:5-multisource-qr-nmea-$(date +%Y%m%d).tar.gz"
+IMAGE_TAG="${IMAGE_TAG:-navigator:5.1-multisource-qr-nmea}"
+EXPORT_TAR_DEFAULT="${DOCKER_DIR}/navigator:5.1-multisource-qr-nmea-$(date +%Y%m%d).tar.gz"
 BUNDLE_DIR_NAME="${BUNDLE_DIR_NAME:-NavigatorDockerApp-MULTISOURCE-QR-NMEA}"
 BUNDLE_TAR_DEFAULT="${DOCKER_DIR}/${BUNDLE_DIR_NAME}-$(date +%Y%m%d).tar.gz"
 BUILDER_NAME="${BUILDER_NAME:-navigator-builder}"
