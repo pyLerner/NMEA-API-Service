@@ -67,6 +67,7 @@ build_deploy_bundle() {
   [[ -f "${EXPORT_TAR_PATH}" ]] || die "архив образа не найден: ${EXPORT_TAR_PATH}"
   [[ -f "${DOCKER_DIR}/install-docker-from-tar.sh" ]] || die "нет install-docker-from-tar.sh в ${DOCKER_DIR}"
   [[ -f "${SCRIPT_DIR}/docker-compose.yml" ]] || die "нет production compose: ${SCRIPT_DIR}/docker-compose.yml"
+  [[ -f "${DOCKER_DIR}/.env.example" ]] || die "нет ${DOCKER_DIR}/.env.example (нужен в deploy bundle)"
   [[ -f "${DOCKER_DIR}/NavAPIServer/bin/naviapiserv.bin" ]] || die "нет NavAPIServer/bin/naviapiserv.bin"
   [[ -f "${DOCKER_DIR}/NDTPClient/bin/NDTP_Client" ]] || die "нет NDTPClient/bin/NDTP_Client"
 
@@ -84,8 +85,10 @@ build_deploy_bundle() {
     --exclude "${BUNDLE_DIR_NAME}/" \
     --exclude 'navigator-*.tar.gz' \
     --exclude 'NavigatorDockerApp-*.tar.gz' \
+    --exclude '.env' \
     "${DOCKER_DIR}/" "${bundle_project}/"
   cp "${SCRIPT_DIR}/docker-compose.yml" "${bundle_project}/docker-compose.yml"
+  cp "${DOCKER_DIR}/.env.example" "${bundle_project}/.env.example"
   printf '%s\n' "${IMAGE_TAG}" > "${bundle_project}/IMAGE_TAG"
   cp "${EXPORT_TAR_PATH}" "${bundle_root}/${image_basename}"
   cp "${DOCKER_DIR}/install-docker-from-tar.sh" "${bundle_root}/"
@@ -94,7 +97,7 @@ build_deploy_bundle() {
   tar -czf "${BUNDLE_TAR_PATH}" -C "${DOCKER_DIR}" "${BUNDLE_DIR_NAME}"
   rm -rf "${bundle_root}"
 
-  log "Deploy bundle: ${BUNDLE_TAR_PATH}"
+  log "Deploy bundle: ${BUNDLE_TAR_PATH} (включая navigator/.env.example)"
 }
 
 cd "${DOCKER_DIR}"
